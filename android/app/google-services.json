@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "999757793825",
+    "project_id": "e-hailing-easy-ride",
+    "storage_bucket": "e-hailing-easy-ride.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:999757793825:android:7eaaf51f0ac02bb679b160",
+        "android_client_info": {
+          "package_name": "com.example.mymaptest"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBwsYq_mf9ZztA2eP6d9T6ybmcQkbKgEZg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

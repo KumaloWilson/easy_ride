@@ -538,7 +538,7 @@ class NotificationService extends GetxService {
     double maxLng = lng + radiusInDegrees;
 
     // Query for online drivers
-    QuerySnapshot snapshot = await _firestore.collection('driver_locations')
+    QuerySnapshot snapshot = await _firestore.collection(Constants.driverLocationsCollection)
         .where('isOnline', isEqualTo: true)
         .get();
 

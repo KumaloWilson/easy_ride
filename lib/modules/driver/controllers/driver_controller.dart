@@ -21,7 +21,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:easy_ride/core/services/storage_service.dart';
 import 'package:easy_ride/models/user_model.dart';
 import 'dart:math';
+import '../../../core/theme/app_theme.dart';
 import '../models/driver.dart';
+import 'package:easy_ride/routes/app_pages.dart';
+import 'package:easy_ride/models/vehicle_model.dart';
 
 enum VerificationStatus {
   pending,
@@ -136,6 +139,40 @@ class DriverController extends GetxController {
     _initLocationTracking();
     _checkDriverVerification();
     _listenForRideRequests();
+
+    // Add a delay to ensure location is obtained before updating the map
+    Future.delayed(Duration(seconds: 1), () {
+      _updateInitialMapPosition();
+    });
+  }
+
+  // Add a new method to update the initial map position
+  void _updateInitialMapPosition() {
+    if (currentLocation.value != null &&
+        currentLocation.value!.latitude != 0 &&
+        currentLocation.value!.longitude != 0) {
+
+      initialCameraPosition.value = CameraPosition(
+        target: LatLng(currentLocation.value!.latitude, currentLocation.value!.longitude),
+        zoom: 15.0,
+      );
+
+      if (mapController.value != null) {
+        mapController.value!.animateCamera(
+          CameraUpdate.newLatLngZoom(
+              LatLng(currentLocation.value!.latitude, currentLocation.value!.longitude),
+              15.0
+          ),
+        );
+        DevLogs.info('Map centered on driver location: ${currentLocation.value!.latitude}, ${currentLocation.value!.longitude}');
+      }
+    } else {
+      // If location is not available yet, try again after a delay
+      DevLogs.warning('Driver location not available yet, retrying...');
+      Future.delayed(Duration(seconds: 2), () {
+        _updateInitialMapPosition();
+      });
+    }
   }
 
   void _disposeResources() {
@@ -147,24 +184,31 @@ class DriverController extends GetxController {
     mapController.value?.dispose();
   }
 
+  // Fix the _loadUserData method to use proper document paths
+
   Future<void> _loadUserData() async {
     try {
       final user = _auth.currentUser;
       if (user != null) {
         // Get user data
-        final userData = await firebaseService.getDocument( path: 'users',);
+        final userDoc = await _firestore.collection('users').doc(user.uid).get();
 
-        if (userData != null) {
-          currentUser.value = UserModel.fromMap(userData as Map<String, dynamic>, user.uid);
+        if (userDoc.exists) {
+          currentUser.value = UserModel.fromMap(userDoc.data() as Map<String, dynamic>, user.uid);
 
           // Get driver data
-          final driverDoc = await firebaseService.getDocument(path:'drivers');
+          final driverDoc = await _firestore.collection('drivers').doc(user.uid).get();
 
-          if (driverDoc != null) {
-            currentDriver.value = DriverModel.fromJson(driverDoc as Map<String, dynamic>);
+          DevLogs.info(driverDoc.data().toString());
+
+          if (driverDoc.exists) {
+            currentDriver.value = DriverModel.fromJson(driverDoc.data() as Map<String, dynamic>);
 
             // Load earnings
             await _loadEarnings();
+          } else {
+            // Create driver profile if it doesn't exist
+            await _createDriverProfile(user.uid);
           }
         }
       }
@@ -173,32 +217,120 @@ class DriverController extends GetxController {
     }
   }
 
+  Future<void> _createDriverProfile(String userId) async {
+    try {
+      DevLogs.info('Creating missing driver profile for user $userId');
+
+      // Get user data
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      if (!userDoc.exists) {
+        DevLogs.error('User document not found for uid: $userId');
+        return;
+      }
+
+      final userData = userDoc.data()!;
+      final userModel = UserModel.fromMap(userData, userId);
+
+      // Check if user is actually a driver
+      if (userModel.userType != 'driver') {
+        DevLogs.error('Cannot create driver profile for non-driver user: $userId');
+        return;
+      }
+
+      // Create a default vehicle model
+      // Create a default vehicle model
+      final defaultVehicle = VehicleModel(
+        id: 'default',
+        make: '',
+        model: '',
+        year: DateTime.now().year.toString(),
+        color: '',
+        licensePlate: '',
+        features: [],
+        photoUrl: '',
+        vehicleType: 'sedan',
+        capacity: 4,
+      );
+
+
+      // Create a default location
+      final defaultLocation = LocationModel(
+        latitude: 0.0,
+        longitude: 0.0,
+        address: '',
+        name: '',
+      );
+
+      // Create driver document
+      await _firestore.collection('drivers').doc(userId).set({
+        'id': userId,
+        'user': userModel.toMap(),
+        'licenseNumber': '',
+        'licenseExpiry': '',
+        'documents': {},
+        'isVerified': false,
+        'verificationStatus': 'pending',
+        'rating': 0.0,
+        'totalRides': 0,
+        'vehicle': defaultVehicle.toJson(),
+        'currentLocation': defaultLocation.toJson(),
+        'status': 'offline',
+        'isOnline': false,
+        'lastStatusUpdate': FieldValue.serverTimestamp(),
+        'totalEarnings': 0.0,
+        'fcmToken': '',
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      // Create driver location document
+      await _firestore.collection('driverLocations').doc(userId).set({
+        'driverId': userId,
+        'location': GeoPoint(0, 0),
+        'status': 'offline',
+        'isOnline': false,
+        'isBusy': false,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      });
+
+      // Reload driver data
+      final newDriverDoc = await _firestore.collection('drivers').doc(userId).get();
+      if (newDriverDoc.exists) {
+        currentDriver.value = DriverModel.fromJson(newDriverDoc.data() as Map<String, dynamic>);
+      }
+
+      DevLogs.info('Driver profile created successfully');
+    } catch (e) {
+      DevLogs.error('Error creating driver profile', exception: e);
+    }
+  }
+
   Future<void> _initializeDriver() async {
     try {
       isMapLoading.value = true;
 
       // Get current user ID
-      final userId = _authService.currentUser.value!.id;
-      if (userId == null) {
+      final user = _auth.currentUser;
+      if (user == null) {
         DevLogs.error('DriverController No user logged in');
         return;
       }
 
       // Get driver data if not already loaded
       if (currentDriver.value == null) {
-        final driverDoc = await firebaseService.firestore
-            .collection('drivers')
-            .where('user.id', isEqualTo: userId)
-            .get();
+        final driverDoc = await _firestore.collection('drivers').doc(user.uid).get();
 
-        if (driverDoc.docs.isEmpty) {
-          DevLogs.error('DriverController No driver profile found for user $userId');
-          return;
+        if (driverDoc.exists) {
+          currentDriver.value = DriverModel.fromJson(driverDoc.data() as Map<String, dynamic>);
+        } else {
+          // Create driver profile if it doesn't exist
+          await _createDriverProfile(user.uid);
+
+          if (currentDriver.value == null) {
+            DevLogs.error('DriverController No driver profile found for user ${user.uid}');
+            return;
+          }
         }
-
-        // Parse driver data
-        final driverData = driverDoc.docs.first.data();
-        currentDriver.value = DriverModel.fromJson(driverData);
       }
 
       // Set initial status
@@ -259,17 +391,40 @@ class DriverController extends GetxController {
 
   // MARK: - Location Tracking
 
+  // Update the _initLocationTracking method to be more robust
   void _initLocationTracking() {
-    DevLogs.debug('Initializing location tracking');
-    _locationSubscription = Geolocator.getPositionStream().listen(_handleLocationUpdate);
+    DevLogs.debug('Initializing location tracking in DriverController');
+
+    // Get initial location from LocationService if available
+    final locationService = Get.find<LocationService>();
+    if (locationService.currentLocation.value != null &&
+        locationService.currentLocation.value!.latitude != null &&
+        locationService.currentLocation.value!.longitude != null) {
+
+      currentLocation.value = LocationModel(
+          latitude: locationService.currentLocation.value!.latitude!,
+          longitude: locationService.currentLocation.value!.longitude!,
+          address: '',
+          name: ''
+      );
+
+      DevLogs.info('Initial location set from LocationService: ${currentLocation.value!.latitude}, ${currentLocation.value!.longitude}');
+    }
+
+    _locationSubscription = Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: 5, // Update every 5 meters
+        )
+    ).listen(_handleLocationUpdate);
   }
 
   void _handleLocationUpdate(Position position) {
     currentLocation.value = LocationModel(
-      latitude: position.latitude,
-      longitude: position.longitude,
-      address: '',
-      name: ""
+        latitude: position.latitude,
+        longitude: position.longitude,
+        address: '',
+        name: ""
     );
 
     if (isFollowingUser.value && mapController.value != null) {
@@ -319,16 +474,45 @@ class DriverController extends GetxController {
 
   // MARK: - Driver Status Management
 
+  // Fix the _checkDriverVerification method to use proper document paths
+
   Future<void> _checkDriverVerification() async {
     try {
       final user = _auth.currentUser;
       if (user != null) {
-        final driverDoc = await firebaseService.getDocument(path: 'drivers');
+        final driverDoc = await _firestore.collection('drivers').doc(user.uid).get();
 
-        if (driverDoc != null) {
-          final Map<String, dynamic> data = driverDoc as Map<String, dynamic>;
+        if (driverDoc.exists) {
+          final Map<String, dynamic> data = driverDoc.data() as Map<String, dynamic>;
           isVerificationPending.value = data['verificationStatus'] != 'approved';
           isVerified.value = data['verificationStatus'] == 'approved';
+
+          // Update document status map
+          if (data.containsKey('documents')) {
+            final documents = data['documents'] as Map<String, dynamic>;
+            documents.forEach((key, value) {
+              if (value is Map<String, dynamic> && value.containsKey('status')) {
+                final status = value['status'];
+                if (status == 'approved') {
+                  documentStatus[key] = VerificationStatus.approved;
+                } else if (status == 'rejected') {
+                  documentStatus[key] = VerificationStatus.rejected;
+                  if (value.containsKey('rejectionReason')) {
+                    rejectionReason.value = value['rejectionReason'] ?? '';
+                  }
+                } else if (status == 'pending') {
+                  documentStatus[key] = VerificationStatus.pending;
+                }
+              }
+            });
+          }
+        } else {
+          // No driver document exists yet
+          isVerificationPending.value = true;
+          isVerified.value = false;
+
+          // Create driver profile if it doesn't exist
+          await _createDriverProfile(user.uid);
         }
       }
     } catch (e) {
@@ -338,6 +522,18 @@ class DriverController extends GetxController {
 
   Future<void> updateDriverStatus(DriverStatus status) async {
     try {
+      // Prevent going online if not verified
+      if (status != DriverStatus.offline && !isVerified.value) {
+        Get.snackbar(
+          'Verification Required',
+          'You must complete the verification process before going online.',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
+        return;
+      }
+
       // If driver is busy, they can't go offline
       if (driverStatus.value == DriverStatus.busy && status == DriverStatus.offline) {
         Get.snackbar(
@@ -402,6 +598,45 @@ class DriverController extends GetxController {
   }
 
   Future<void> toggleOnlineStatus() async {
+    // Check if driver is verified before allowing to go online
+    if (driverStatus.value == DriverStatus.offline && !isVerified.value) {
+      Get.snackbar(
+        'Verification Required',
+        'You must complete the verification process before going online.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 3),
+      );
+
+      // Prompt to complete verification
+      final bool goToVerification = await Get.dialog(
+        AlertDialog(
+          title: const Text('Verification Required'),
+          content: const Text('You need to complete the verification process before you can go online. Would you like to complete your verification now?'),
+          actions: [
+            TextButton(
+              onPressed: () => Get.back(result: false),
+              child: const Text('Later'),
+            ),
+            ElevatedButton(
+              onPressed: () => Get.back(result: true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryColor,
+              ),
+              child: const Text('Complete Verification'),
+            ),
+          ],
+        ),
+      ) ?? false;
+
+      if (goToVerification) {
+        Get.toNamed(Routes.driverVerification);
+      }
+
+      return;
+    }
+
     final newStatus = driverStatus.value == DriverStatus.offline
         ? DriverStatus.online
         : DriverStatus.offline;
@@ -1385,10 +1620,10 @@ class DriverController extends GetxController {
 
     } catch (e) {
       DevLogs.error('DriverController Error loading ride history: $e');
-      } finally {
+    } finally {
       isLoadingRideHistory.value = false;
-      }
-   }
+    }
+  }
 
   // MARK: - Map Controls
 
@@ -1422,8 +1657,40 @@ class DriverController extends GetxController {
     }
   }
 
+  // Update the setMapController method to center on user location
   void setMapController(GoogleMapController controller) {
     mapController.value = controller;
+
+    // Center map on user location if available
+    if (currentLocation.value != null &&
+        currentLocation.value!.latitude != 0 &&
+        currentLocation.value!.longitude != 0) {
+
+      controller.animateCamera(
+        CameraUpdate.newLatLngZoom(
+            LatLng(currentLocation.value!.latitude, currentLocation.value!.longitude),
+            15.0
+        ),
+      );
+      DevLogs.info('Map centered on driver location during controller setup');
+    } else {
+      DevLogs.warning('Driver location not available during map controller setup');
+      // Try to get location and center map after a short delay
+      Future.delayed(Duration(seconds: 1), () {
+        if (currentLocation.value != null &&
+            currentLocation.value!.latitude != 0 &&
+            currentLocation.value!.longitude != 0) {
+
+          controller.animateCamera(
+            CameraUpdate.newLatLngZoom(
+                LatLng(currentLocation.value!.latitude, currentLocation.value!.longitude),
+                15.0
+            ),
+          );
+          DevLogs.info('Map centered on driver location after delay');
+        }
+      });
+    }
   }
 
   // MARK: - UI Controls
@@ -1552,6 +1819,4 @@ class DriverController extends GetxController {
       return null;
     }
   }
-
-
 }

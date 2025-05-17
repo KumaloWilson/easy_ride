@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:easy_ride/core/values/constants.dart';
 import 'package:get/get.dart';
 import 'package:location/location.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -25,6 +26,7 @@ class LocationService extends GetxService {
   // Add this map to store location sharing subscriptions
   final Map<String, StreamSubscription<LocationData>> _locationSharingSubscriptions = {};
 
+// Update the init method to ensure location is obtained before returning
   Future<LocationService> init() async {
     _apiService = Get.find<ApiService>();
 
@@ -51,30 +53,60 @@ class LocationService extends GetxService {
       }
     }
 
-    // Configure location settings
+    // Configure location settings for higher accuracy and more frequent updates
     _location.changeSettings(
       accuracy: LocationAccuracy.high,
-      interval: 10000, // 10 seconds
-      distanceFilter: 10, // 10 meters
+      interval: 5000, // 5 seconds
+      distanceFilter: 5, // 5 meters
     );
 
-    // Get initial location
+    // Get initial location - wait for it with a timeout
     try {
-      currentLocation.value = await _location.getLocation();
-      DevLogs.info('Initial location obtained: ${currentLocation.value?.latitude}, ${currentLocation.value?.longitude}');
+      DevLogs.info('Getting initial location...');
+      currentLocation.value = await _location.getLocation().timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          DevLogs.warning('Timeout getting initial location');
+          return LocationData.fromMap({
+            'latitude': 0.0,
+            'longitude': 0.0,
+            'accuracy': 0.0,
+            'altitude': 0.0,
+            'speed': 0.0,
+            'speed_accuracy': 0.0,
+            'heading': 0.0,
+            'time': 0.0,
+          });
+        },
+      );
+
+      if (currentLocation.value?.latitude != null && currentLocation.value?.longitude != null) {
+        DevLogs.info('Initial location obtained: ${currentLocation.value?.latitude}, ${currentLocation.value?.longitude}');
+      } else {
+        DevLogs.warning('Initial location is null or has null coordinates');
+      }
     } catch (e) {
       DevLogs.error('Error getting initial location', exception: e);
     }
 
+    // Start location updates immediately
+    await startLocationUpdates();
+
     return this;
   }
 
+// Update startLocationUpdates to be more robust
   Future<void> startLocationUpdates() async {
     if (_locationSubscription != null) {
       await _locationSubscription!.cancel();
     }
 
     _locationSubscription = _location.onLocationChanged.listen((LocationData locationData) {
+      if (locationData.latitude == null || locationData.longitude == null) {
+        DevLogs.warning('Received location update with null coordinates');
+        return;
+      }
+
       currentLocation.value = locationData;
       DevLogs.debug('Location updated: ${locationData.latitude}, ${locationData.longitude}');
 
@@ -99,7 +131,7 @@ class LocationService extends GetxService {
     if (_authService.firebaseUser.value != null) {
       String driverId = _authService.firebaseUser.value!.uid;
 
-      await _firestore.collection('driver_locations').doc(driverId).set({
+      await _firestore.collection(Constants.driverLocationsCollection).doc(driverId).set({
         'location': GeoPoint(locationData.latitude!, locationData.longitude!),
         'heading': locationData.heading,
         'speed': locationData.speed,
@@ -117,7 +149,7 @@ class LocationService extends GetxService {
     if (_authService.firebaseUser.value != null) {
       String driverId = _authService.firebaseUser.value!.uid;
 
-      await _firestore.collection('driver_locations').doc(driverId).update({
+      await _firestore.collection(Constants.driverLocationsCollection).doc(driverId).update({
         'isOnline': false,
         'lastUpdated': FieldValue.serverTimestamp(),
       });
@@ -130,7 +162,7 @@ class LocationService extends GetxService {
     DevLogs.info('Searching for nearby drivers within $radiusInKm km');
 
     // Get all online drivers
-    QuerySnapshot snapshot = await _firestore.collection('driver_locations')
+    QuerySnapshot snapshot = await _firestore.collection(Constants.driverLocationsCollection)
         .where('isOnline', isEqualTo: true)
         .get();
 

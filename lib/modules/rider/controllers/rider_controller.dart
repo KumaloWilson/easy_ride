@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:easy_ride/modules/rider/views/nearby_drivers_view.dart';
 import 'package:get/get.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:easy_ride/core/services/location_service.dart';
@@ -152,24 +153,60 @@ class RiderController extends GetxController {
     _checkForActiveRide();
     _loadSurgePricing();
     _loadRecentSearches();
+
+    // Add a delay to ensure location is obtained before updating the map
+    Future.delayed(Duration(seconds: 1), () {
+      _updateInitialMapPosition();
+    });
   }
 
-  @override
-  void onClose() {
-    _locationSubscription?.cancel();
-    _rideSubscription?.cancel();
-    _driverLocationSubscription?.cancel();
-    mapController.value?.dispose();
-    tempMapController.value?.dispose();
-    DevLogs.info('RiderController disposed');
-    super.onClose();
+  // Add a new method to update the initial map position
+  void _updateInitialMapPosition() {
+    if (currentLocation.value.latitude != 0 && currentLocation.value.longitude != 0) {
+      initialCameraPosition.value = CameraPosition(
+        target: currentLocation.value,
+        zoom: mapZoom.value,
+      );
+
+      if (mapController.value != null) {
+        mapController.value!.animateCamera(
+          CameraUpdate.newLatLngZoom(currentLocation.value, mapZoom.value),
+        );
+        _updateUserMarker();
+      }
+
+      DevLogs.info('Map centered on user location: ${currentLocation.value.latitude}, ${currentLocation.value.longitude}');
+    } else {
+      // If location is not available yet, try again after a delay
+      DevLogs.warning('User location not available yet, retrying...');
+      Future.delayed(Duration(seconds: 2), () {
+        _updateInitialMapPosition();
+      });
+    }
   }
 
+  // Update the _initLocationTracking method to be more robust
   void _initLocationTracking() {
-    DevLogs.debug('Initializing location tracking');
+    DevLogs.debug('Initializing location tracking in RiderController');
+
+    // Get initial location from LocationService if available
+    final locationService = Get.find<LocationService>();
+    if (locationService.currentLocation.value != null &&
+        locationService.currentLocation.value!.latitude != null &&
+        locationService.currentLocation.value!.longitude != null) {
+
+      currentLocation.value = LatLng(
+          locationService.currentLocation.value!.latitude!,
+          locationService.currentLocation.value!.longitude!
+      );
+
+      DevLogs.info('Initial location set from LocationService: ${currentLocation.value.latitude}, ${currentLocation.value.longitude}');
+    }
+
     _locationSubscription = _locationService.locationStream.listen((position) {
       if (position.latitude != null && position.longitude != null) {
         currentLocation.value = LatLng(position.latitude!, position.longitude!);
+        DevLogs.debug('Location updated in RiderController: ${position.latitude}, ${position.longitude}');
 
         // Update initial camera position if it's still the default
         if (initialCameraPosition.value.target.latitude == 37.7749 &&
@@ -198,31 +235,46 @@ class RiderController extends GetxController {
     });
   }
 
+  // Update the onMapCreated method to center on user location
   void onMapCreated(GoogleMapController controller) {
     mapController.value = controller;
     isMapLoading.value = false;
 
+
+    // Center map on user location if available
     if (currentLocation.value.latitude != 0) {
       controller.animateCamera(
         CameraUpdate.newLatLngZoom(currentLocation.value, mapZoom.value),
       );
       _updateUserMarker();
+      DevLogs.info('Map centered on user location during creation');
+    } else {
+      DevLogs.warning('User location not available during map creation');
+      // Try to get location and center map after a short delay
+      Future.delayed(Duration(seconds: 1), () {
+        if (currentLocation.value.latitude != 0) {
+          controller.animateCamera(
+            CameraUpdate.newLatLngZoom(currentLocation.value, mapZoom.value),
+          );
+          _updateUserMarker();
+          DevLogs.info('Map centered on user location after delay');
+        }
+      });
     }
-
-    // Apply custom map style
-    _setMapStyle();
-    DevLogs.debug('Map created and initialized');
   }
 
-  Future<void> _setMapStyle() async {
-    try {
-      String style = await rootBundle.loadString('assets/map_style.json');
-      mapController.value?.setMapStyle(style);
-      DevLogs.debug('Map style applied');
-    } catch (e) {
-      DevLogs.error('Error setting map style', exception: e);
-    }
+  @override
+  void onClose() {
+    _locationSubscription?.cancel();
+    _rideSubscription?.cancel();
+    _driverLocationSubscription?.cancel();
+    mapController.value?.dispose();
+    tempMapController.value?.dispose();
+    DevLogs.info('RiderController disposed');
+    super.onClose();
   }
+
+
 
   void toggleFollowUser() {
     isFollowingUser.value = !isFollowingUser.value;
@@ -238,7 +290,10 @@ class RiderController extends GetxController {
   }
 
   Future<void> _updateUserMarker() async {
-    if (currentLocation.value.latitude == 0) return;
+    if (currentLocation.value.latitude == 0) {
+      DevLogs.warning('Cannot update user marker: invalid location');
+      return;
+    }
 
     try {
       final BitmapDescriptor icon = await _createCustomMarkerBitmap(
@@ -257,6 +312,7 @@ class RiderController extends GetxController {
       updatedMarkers.removeWhere((m) => m.markerId.value == 'user_location');
       updatedMarkers.add(marker);
       markers.value = updatedMarkers;
+      DevLogs.debug('User marker updated at: ${currentLocation.value.latitude}, ${currentLocation.value.longitude}');
     } catch (e) {
       DevLogs.error('Error updating user marker', exception: e);
       // Fallback to default marker if custom one fails
@@ -270,6 +326,7 @@ class RiderController extends GetxController {
       updatedMarkers.removeWhere((m) => m.markerId.value == 'user_location');
       updatedMarkers.add(marker);
       markers.value = updatedMarkers;
+      DevLogs.debug('Used fallback marker for user location');
     }
   }
 
@@ -961,7 +1018,7 @@ class RiderController extends GetxController {
     try {
       // Get nearby drivers from Firestore
       final driversSnapshot = await _firestore
-          .collection('driver_locations')
+          .collection(Constants.driverLocationsCollection)
           .where('isOnline', isEqualTo: true)
           .where('isBusy', isEqualTo: false)
           .get();
@@ -1239,7 +1296,9 @@ class RiderController extends GetxController {
     if (_authService.firebaseUser.value == null) return;
 
     // Navigate to nearby drivers view
-    Get.toNamed('/rider/nearby-drivers');
+    Get.to(
+        ()=> NearbyDriversView()
+    );
 
     // Fetch nearby drivers
     await fetchNearbyDrivers();
@@ -1993,9 +2052,6 @@ extension RiderControllerExtension on RiderController {
       throw Exception('Failed to update location: $e');
     }
   }
-
-  // Add a userProfile observable for the sidebar
-
 
   // Method to load user profile
   Future<void> loadUserProfile() async {

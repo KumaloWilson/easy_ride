@@ -10,7 +10,7 @@ class DriverModel {
   final UserModel user;
   final String licenseNumber;
   final String licenseExpiry;
-  final List<String> documents;
+  final Map<String, dynamic> documents; // Changed from List<String> to Map<String, dynamic>
   final bool isVerified;
   final double rating;
   final int totalRides;
@@ -42,17 +42,18 @@ class DriverModel {
     return DriverModel(
       id: json['id'] as String,
       user: UserModel.fromMap(json['user'] as Map<String, dynamic>, json['id'] as String),
-      licenseNumber: json['licenseNumber'] as String,
-      licenseExpiry: json['licenseExpiry'] as String,
-      documents: List<String>.from(json['documents'] as List),
-      isVerified: json['isVerified'] as bool,
-      rating: (json['rating'] as num).toDouble(),
-      totalRides: json['totalRides'] as int,
+      licenseNumber: json['licenseNumber'] as String? ?? '',
+      licenseExpiry: json['licenseExpiry'] as String? ?? '',
+      // Handle documents as Map instead of List
+      documents: (json['documents'] as Map<String, dynamic>?) ?? {},
+      isVerified: json['isVerified'] as bool? ?? false,
+      rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
+      totalRides: json['totalRides'] as int? ?? 0,
       vehicle: VehicleModel.fromJson(json['vehicle'] as Map<String, dynamic>),
       currentLocation: LocationModel.fromJson(json['currentLocation'] as String),
-      status: _parseDriverStatus(json['status'] as String),
-      lastStatusUpdate: (json['lastStatusUpdate'] as Timestamp).toDate(),
-      totalEarnings: (json['totalEarnings'] as num).toDouble(),
+      status: _parseDriverStatus(json['isOnline'] == true ? 'online' : 'offline'), // Use isOnline field
+      lastStatusUpdate: (json['lastStatusUpdate'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      totalEarnings: (json['totalEarnings'] as num?)?.toDouble() ?? 0.0,
       fcmToken: json['fcmToken'] as String? ?? '',
     );
   }
@@ -69,6 +70,7 @@ class DriverModel {
       'totalRides': totalRides,
       'vehicle': vehicle.toJson(),
       'currentLocation': currentLocation.toJson(),
+      'isOnline': status == DriverStatus.online, // Store as isOnline boolean
       'status': status.toString().split('.').last,
       'lastStatusUpdate': Timestamp.fromDate(lastStatusUpdate),
       'totalEarnings': totalEarnings,
@@ -81,7 +83,7 @@ class DriverModel {
     UserModel? user,
     String? licenseNumber,
     String? licenseExpiry,
-    List<String>? documents,
+    Map<String, dynamic>? documents, // Updated type
     bool? isVerified,
     double? rating,
     int? totalRides,

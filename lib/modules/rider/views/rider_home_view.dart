@@ -3,15 +3,12 @@ import 'package:easy_ride/modules/rider/views/ride_details_view.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:lottie/lottie.dart';
-
 import '../../../core/theme/app_theme.dart';
 import '../../../models/location_model.dart';
 import '../controllers/rider_controller.dart';
 import '../models/saved_location_model.dart';
 import '../views/ride_booking_view.dart';
 import '../views/ride_history_view.dart';
-import '../../profile/views/profile_view.dart';
 import '../widgets/rider_sidebar.dart';
 
 class RiderHomeView extends StatelessWidget {
@@ -39,16 +36,16 @@ class RiderHomeView extends StatelessWidget {
     );
   }
 
+  // Update the _buildMap method to handle location updates better
   Widget _buildMap() {
     return Obx(() {
       final markers = controller.markers;
       final polylines = controller.polylines;
+      final currentPos = controller.currentLocation.value;
+      final initialPos = controller.initialCameraPosition.value;
 
       return GoogleMap(
-        initialCameraPosition: CameraPosition(
-          target: controller.currentLocation.value,
-          zoom: 15,
-        ),
+        initialCameraPosition: initialPos,
         markers: markers,
         polylines: polylines,
         myLocationEnabled: true,
@@ -58,6 +55,16 @@ class RiderHomeView extends StatelessWidget {
         compassEnabled: true,
         onMapCreated: (GoogleMapController mapController) {
           controller.mapController.value = mapController;
+          controller.onMapCreated(mapController);
+
+          // Ensure we center on user location after map is created
+          if (currentPos.latitude != 0 && currentPos.longitude != 0) {
+            Future.delayed(Duration(milliseconds: 500), () {
+              mapController.animateCamera(
+                CameraUpdate.newLatLngZoom(currentPos, 15),
+              );
+            });
+          }
         },
       );
     });
@@ -428,6 +435,7 @@ class RiderHomeView extends StatelessWidget {
     );
   }
 
+  // Update the _buildCurrentLocationButton to make it more prominent
   Widget _buildCurrentLocationButton() {
     return Positioned(
       right: 16,
@@ -440,7 +448,18 @@ class RiderHomeView extends StatelessWidget {
           color: Colors.black87,
         ),
         onPressed: () {
-          controller.toggleFollowUser();
+          if (controller.currentLocation.value.latitude != 0) {
+            controller.mapController.value?.animateCamera(
+              CameraUpdate.newLatLngZoom(controller.currentLocation.value, 15),
+            );
+            controller.isFollowingUser.value = true;
+          } else {
+            Get.snackbar(
+              'Location Unavailable',
+              'Your current location is not available yet. Please try again in a moment.',
+              snackPosition: SnackPosition.BOTTOM,
+            );
+          }
         },
       ),
     );

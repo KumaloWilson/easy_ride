@@ -64,32 +64,54 @@ class DriverHomeView extends GetView<DriverController> {
     );
   }
 
+  // Update the _buildMapView method to handle location updates better
   Widget _buildMapView() {
     return Stack(
       children: [
         // Google Map
-        Obx(() => GoogleMap(
-          initialCameraPosition: controller.initialCameraPosition.value,
-          myLocationEnabled: true,
-          myLocationButtonEnabled: false,
-          compassEnabled: true,
-          mapToolbarEnabled: false,
-          zoomControlsEnabled: false,
-          markers: controller.markers,
-          polylines: controller.polylines,
-          mapType: controller.mapType.value == 'normal' ? MapType.normal : MapType.satellite,
-          trafficEnabled: controller.showTraffic.value,
-          circles: controller.circles,
-          onMapCreated: controller.setMapController,
-          onCameraMove: (position) {
-            controller.mapZoom.value = position.zoom;
-          },
-          onCameraIdle: () {
-            if (controller.isFollowingUser.value) {
-              controller.isFollowingUser.value = false;
-            }
-          },
-        )),
+        Obx(() {
+          final initialPos = controller.initialCameraPosition.value;
+          final currentLocation = controller.currentLocation.value;
+
+          return GoogleMap(
+            initialCameraPosition: initialPos,
+            myLocationEnabled: true,
+            myLocationButtonEnabled: false,
+            compassEnabled: true,
+            mapToolbarEnabled: false,
+            zoomControlsEnabled: false,
+            markers: controller.markers,
+            polylines: controller.polylines,
+            mapType: controller.mapType.value == 'normal' ? MapType.normal : MapType.satellite,
+            trafficEnabled: controller.showTraffic.value,
+            circles: controller.circles,
+            onMapCreated: (GoogleMapController mapController) {
+              controller.setMapController(mapController);
+
+              // Ensure we center on driver location after map is created
+              if (currentLocation != null &&
+                  currentLocation.latitude != 0 &&
+                  currentLocation.longitude != 0) {
+                Future.delayed(Duration(milliseconds: 500), () {
+                  mapController.animateCamera(
+                    CameraUpdate.newLatLngZoom(
+                        LatLng(currentLocation.latitude, currentLocation.longitude),
+                        15
+                    ),
+                  );
+                });
+              }
+            },
+            onCameraMove: (position) {
+              controller.mapZoom.value = position.zoom;
+            },
+            onCameraIdle: () {
+              if (controller.isFollowingUser.value) {
+                controller.isFollowingUser.value = false;
+              }
+            },
+          );
+        }),
 
         // App Bar
         _buildTopBar(Get.context!),
@@ -143,8 +165,8 @@ class DriverHomeView extends GetView<DriverController> {
                   const Spacer(),
                   Switch(
                     value: controller.driverStatus.value != DriverStatus.offline,
-                    onChanged: controller.driverStatus.value == DriverStatus.busy
-                        ? null  // Disable toggle when busy
+                    onChanged: (controller.driverStatus.value == DriverStatus.busy || !controller.isVerified.value)
+                        ? null  // Disable toggle when busy or not verified
                         : (value) {
                       controller.toggleOnlineStatus();
                     },
@@ -212,7 +234,7 @@ class DriverHomeView extends GetView<DriverController> {
                           Text(
                             controller.isVerificationPending.value
                                 ? 'Your documents are being reviewed'
-                                : 'Complete verification to start accepting rides',
+                                : 'Complete verification to go online and accept rides',
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 12,
@@ -656,7 +678,7 @@ class DriverHomeView extends GetView<DriverController> {
                 child: IconButton(
                   icon: const Icon(Icons.my_location),
                   color: AppTheme.primaryColor,
-                  onPressed: controller.centerOnUserLocation,
+                  onPressed: centerOnUserLocation,
                 ),
               ),
               const SizedBox(height: 8),
@@ -1658,5 +1680,31 @@ class DriverHomeView extends GetView<DriverController> {
         ],
       ),
     );
+  }
+
+  // Update the centerOnUserLocation method to be more robust
+  void centerOnUserLocation() {
+    if (controller.currentLocation.value != null &&
+        controller.currentLocation.value!.latitude != 0 &&
+        controller.currentLocation.value!.longitude != 0 &&
+        controller.mapController.value != null) {
+
+      controller.mapController.value!.animateCamera(
+        CameraUpdate.newLatLngZoom(
+            LatLng(
+                controller.currentLocation.value!.latitude,
+                controller.currentLocation.value!.longitude
+            ),
+            15
+        ),
+      );
+      controller.isFollowingUser.value = true;
+    } else {
+      Get.snackbar(
+        'Location Unavailable',
+        'Your current location is not available yet. Please try again in a moment.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    }
   }
 }

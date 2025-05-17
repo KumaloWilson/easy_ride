@@ -114,6 +114,10 @@ class FirebaseService extends GetxService {
   // Get a document
   Future<cloudFirestore.DocumentSnapshot> getDocument({required String path}) async {
     try {
+      if (!path.contains('/')) {
+        throw ArgumentError('A document path must include both collection and document ID (e.g., "collection/docId")');
+      }
+
       DevLogs.debug('Getting document at path: $path');
       return await firestore.doc(path).get();
     } catch (e) {

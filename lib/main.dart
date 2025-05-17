@@ -51,11 +51,11 @@ Future<void> initServices() async {
   await Get.putAsync(() => PreferencesService().init());
   await Get.putAsync(() => AuthService().init());
   await Get.putAsync(() => ApiService().init());
+  await Get.putAsync(() => FirebaseService().init());
   await Get.putAsync(() => StorageService().init());
   await Get.putAsync(() => LocationService().init());
   await Get.putAsync(() => NotificationService().init());
   await Get.putAsync(() => VoiceNavigationService().init());
-  await Get.putAsync(() => FirebaseService().init());
   await Get.putAsync(() => SafetyService().init());
 
   print('All services initialized');

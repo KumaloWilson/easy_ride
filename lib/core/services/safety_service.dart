@@ -30,21 +30,7 @@ class SafetyService extends GetxService {
     await _loadEmergencyContact();
     return this;
   }
-
-  Future<bool> makePhoneCall(String phoneNumber) async {
-    // Format the phone number into a valid tel: URI
-    final Uri uri = Uri.parse('tel:$phoneNumber');
-
-    // Check if the URL can be launched
-    if (await canLaunchUrl(uri)) {
-      // Launch the URL
-      return await launchUrl(uri);
-    } else {
-      // Throw an exception if the URL can't be launched
-      throw Exception('Could not launch $uri');
-    }
-  }
-
+  
   Future<void> _loadEmergencyContact() async {
     if (_authService.firebaseUser.value != null) {
       try {
@@ -249,14 +235,12 @@ class SafetyService extends GetxService {
         // Start recording
         if (await _audioRecorder.hasPermission()) {
           // Start recording to file
-          await _audioRecorder.start(const RecordConfig(), path: 'aFullPath/myFile.m4a');
+          await _audioRecorder.start(const RecordConfig(), path: path);
           // ... or to stream
           final stream = await _audioRecorder.startStream(const RecordConfig(encoder: AudioEncoder.pcm16bits));
-
-          recordingPath.value = path;
-          isRecording.value = true;
         }
-
+        recordingPath.value = path;
+        isRecording.value = true;
         
         // Update emergency record if active
         if (isEmergencyActive.value && _emergencyId != null) {
@@ -294,7 +278,11 @@ class SafetyService extends GetxService {
       throw Exception('Failed to stop recording');
     }
   }
-  
+
+  Future<void> makePhoneCall(String phoneNumber) async {
+
+  }
+
   Future<void> shareRecording() async {
     final path = await stopRecording();
     if (path == null) return;

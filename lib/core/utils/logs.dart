@@ -4,27 +4,27 @@ import 'package:logger/logger.dart';
 class DevLogs {
   static final Logger _logger = Logger();
 
-  static void logInfo(String msg) {
+  static void info(String msg) {
     if (kDebugMode) {
       _logger.i(msg);
     }
   }
 
-  static void logSuccess(String msg) {
+  static void debug(String msg) {
     if (kDebugMode) {
       _logger.i(msg);
     }
   }
 
-  static void logWarning(String msg) {
+  static void warning(String msg) {
     if (kDebugMode) {
       _logger.w(msg);
     }
   }
 
-  static void logError(String msg) {
+  static void error(String msg, {dynamic exception}) {
     if (kDebugMode) {
-      _logger.e(msg);
+      _logger.e("$msg $exception");
     }
   }
 }

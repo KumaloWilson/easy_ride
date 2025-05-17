@@ -16,14 +16,14 @@ class ReportUserForm extends StatefulWidget {
   final bool isLoading;
 
   const ReportUserForm({
-    super.key,
+    Key? key,
     required this.reportedUserId,
     this.rideId,
     required this.reportedUserName,
     required this.onSubmit,
     this.onCancel,
     this.isLoading = false,
-  });
+  }) : super(key: key);
 
   @override
   State<ReportUserForm> createState() => _ReportUserFormState();
@@ -400,8 +400,6 @@ class _ReportUserFormState extends State<ReportUserForm> {
         return 'Inappropriate Behavior';
       case FlagType.spam:
         return 'Spam or Misleading';
-      case FlagType.conduct:
-        return 'Conduct';
       case FlagType.other:
         return 'Other';
     }

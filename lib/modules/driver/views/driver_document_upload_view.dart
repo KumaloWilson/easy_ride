@@ -160,25 +160,25 @@ class _DriverDocumentUploadViewState extends State<DriverDocumentUploadView> {
       
       if (_driverLicenseImage != null) {
         driverLicenseUrl = await _storageService.uploadDocumentImage(
-          file: _driverLicenseImage!,
-          userId: userId,
-          documentType: 'driver_license',
+          _driverLicenseImage!,
+          userId,
+          'driver_license',
         );
       }
       
       if (_vehicleRegistrationImage != null) {
         vehicleRegistrationUrl = await _storageService.uploadDocumentImage(
-          file: _vehicleRegistrationImage!,
-          userId: userId,
-          documentType: 'vehicle_registration',
+          _vehicleRegistrationImage!,
+          userId,
+          'vehicle_registration',
         );
       }
       
       if (_insuranceDocumentImage != null) {
         insuranceDocumentUrl = await _storageService.uploadDocumentImage(
-          file:_insuranceDocumentImage!,
-          userId: userId,
-          documentType: 'insurance',
+          _insuranceDocumentImage!,
+          userId,
+          'insurance',
         );
       }
       

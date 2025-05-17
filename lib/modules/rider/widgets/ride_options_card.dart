@@ -36,7 +36,7 @@ class RideOptionsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final List<String> types = rideTypes ?? ['Standard', 'Premium', 'XL'];
     final List<String> methods = paymentMethods ?? ['card', 'cash', 'wallet'];
-
+    
     return Container(
       margin: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -85,7 +85,7 @@ class RideOptionsCard extends StatelessWidget {
               ],
             ),
           ),
-
+          
           // Ride types
           SizedBox(
             height: 120,
@@ -96,7 +96,7 @@ class RideOptionsCard extends StatelessWidget {
               itemBuilder: (context, index) {
                 final type = types[index];
                 final isSelected = type == selectedRideType;
-
+                
                 return GestureDetector(
                   onTap: () => onRideTypeSelected(type),
                   child: Container(
@@ -150,9 +150,9 @@ class RideOptionsCard extends StatelessWidget {
               },
             ),
           ),
-
+          
           const Divider(),
-
+          
           // Payment method
           Padding(
             padding: const EdgeInsets.all(16),
@@ -198,7 +198,7 @@ class RideOptionsCard extends StatelessWidget {
               ],
             ),
           ),
-
+          
           // Fare
           if (fare != null)
             Padding(
@@ -234,7 +234,7 @@ class RideOptionsCard extends StatelessWidget {
                 ],
               ),
             ),
-
+          
           // Request ride button
           Padding(
             padding: const EdgeInsets.all(16),

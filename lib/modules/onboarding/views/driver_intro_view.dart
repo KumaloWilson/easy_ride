@@ -10,7 +10,7 @@ class DriverIntroView extends GetView<OnboardingController> {
   @override
   Widget build(BuildContext context) {
     final PageController pageController = PageController();
-
+    
     return Scaffold(
       body: SafeArea(
         child: Column(
@@ -26,7 +26,7 @@ class DriverIntroView extends GetView<OnboardingController> {
                 ),
               ),
             ),
-
+            
             // Page view
             Expanded(
               child: PageView(
@@ -56,7 +56,7 @@ class DriverIntroView extends GetView<OnboardingController> {
                 ],
               ),
             ),
-
+            
             // Bottom navigation
             Container(
               padding: const EdgeInsets.all(24.0),
@@ -74,7 +74,7 @@ class DriverIntroView extends GetView<OnboardingController> {
                       dotColor: Colors.grey.shade300,
                     ),
                   ),
-
+                  
                   // Next/Get Started button
                   Obx(() => ElevatedButton(
                     onPressed: () {
@@ -110,7 +110,7 @@ class DriverIntroView extends GetView<OnboardingController> {
       ),
     );
   }
-
+  
   Widget _buildIntroPage({
     required String title,
     required String description,
@@ -136,7 +136,7 @@ class DriverIntroView extends GetView<OnboardingController> {
             ),
           ),
           const SizedBox(height: 40),
-
+          
           // Title
           Text(
             title,
@@ -147,7 +147,7 @@ class DriverIntroView extends GetView<OnboardingController> {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
-
+          
           // Description
           Text(
             description,

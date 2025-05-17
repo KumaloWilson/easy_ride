@@ -1,47 +1,39 @@
 import 'dart:async';
-import 'dart:math';
-import 'package:dio/dio.dart';
 import 'package:get/get.dart';
 import 'package:location/location.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:easy_ride/core/services/auth_service.dart';
+import 'package:easy_ride/models/location_model.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
-
-import '../values/constants.dart';
+import 'dart:math' show pi, sqrt, atan2, sin, cos;
+import 'package:easy_ride/core/utils/logs.dart';
+import 'package:easy_ride/core/services/api_service.dart';
 
 class LocationService extends GetxService {
   final Location _location = Location();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final AuthService _authService = Get.find<AuthService>();
-  final Dio _dio = Dio();
-
-  // Base URLs for Google APIs
-  final String _placesApiBaseUrl = 'https://maps.googleapis.com/maps/api/place';
-  final String _directionsApiBaseUrl = 'https://maps.googleapis.com/maps/api/directions';
-
-  // Add location stream controller for external components to listen to
-  final _locationStreamController = StreamController<LocationData>.broadcast();
-  Stream<LocationData> get locationStream => _locationStreamController.stream;
+  late final ApiService _apiService;
 
   Rx<LocationData?> currentLocation = Rx<LocationData?>(null);
   StreamSubscription<LocationData>? _locationSubscription;
 
+  // Stream for location updates
+  Stream<LocationData> get locationStream => _location.onLocationChanged;
+
   Future<LocationService> init() async {
+    _apiService = Get.find<ApiService>();
+
     bool serviceEnabled;
     PermissionStatus permissionGranted;
-
-    // Configure Dio
-    _dio.options.connectTimeout = const Duration(seconds: 10);
-    _dio.options.receiveTimeout = const Duration(seconds: 10);
-    _dio.options.contentType = Headers.jsonContentType;
-    _dio.options.responseType = ResponseType.json;
 
     // Check if location service is enabled
     serviceEnabled = await _location.serviceEnabled();
     if (!serviceEnabled) {
       serviceEnabled = await _location.requestService();
       if (!serviceEnabled) {
+        DevLogs.warning('Location services are disabled');
         return this;
       }
     }
@@ -51,6 +43,7 @@ class LocationService extends GetxService {
     if (permissionGranted == PermissionStatus.denied) {
       permissionGranted = await _location.requestPermission();
       if (permissionGranted != PermissionStatus.granted) {
+        DevLogs.warning('Location permissions are denied');
         return this;
       }
     }
@@ -58,16 +51,16 @@ class LocationService extends GetxService {
     // Configure location settings
     _location.changeSettings(
       accuracy: LocationAccuracy.high,
-      interval: 5000, // 5 seconds
-      distanceFilter: 5, // 5 meters
+      interval: 10000, // 10 seconds
+      distanceFilter: 10, // 10 meters
     );
 
     // Get initial location
     try {
       currentLocation.value = await _location.getLocation();
-      _locationStreamController.add(currentLocation.value!);
+      DevLogs.info('Initial location obtained: ${currentLocation.value?.latitude}, ${currentLocation.value?.longitude}');
     } catch (e) {
-      print('Error getting initial location: $e');
+      DevLogs.error('Error getting initial location', exception: e);
     }
 
     return this;
@@ -80,21 +73,22 @@ class LocationService extends GetxService {
 
     _locationSubscription = _location.onLocationChanged.listen((LocationData locationData) {
       currentLocation.value = locationData;
-
-      // Add to the stream for external components
-      _locationStreamController.add(locationData);
+      DevLogs.debug('Location updated: ${locationData.latitude}, ${locationData.longitude}');
 
       // If user is a driver and logged in, update location in Firestore
       if (_authService.isDriver && _authService.isLoggedIn) {
         updateDriverLocation(locationData);
       }
     });
+
+    DevLogs.info('Location updates started');
   }
 
   Future<void> stopLocationUpdates() async {
     if (_locationSubscription != null) {
       await _locationSubscription!.cancel();
       _locationSubscription = null;
+      DevLogs.info('Location updates stopped');
     }
   }
 
@@ -111,6 +105,8 @@ class LocationService extends GetxService {
         'isOnline': true,
         'driverId': driverId,
       }, SetOptions(merge: true));
+
+      DevLogs.debug('Driver location updated in Firestore');
     }
   }
 
@@ -122,54 +118,61 @@ class LocationService extends GetxService {
         'isOnline': false,
         'lastUpdated': FieldValue.serverTimestamp(),
       });
+
+      DevLogs.info('Driver set to offline');
     }
   }
 
-  Future<List<Map<String, dynamic>>> getNearbyDrivers(LatLng location, double radiusInKm) async {
-    // Convert radius to degrees (approximate)
-    double radiusInDegrees = radiusInKm / 111.32;
+  Future<List<LocationModel>> getNearbyDrivers(LatLng location, double radiusInKm) async {
+    DevLogs.info('Searching for nearby drivers within $radiusInKm km');
 
-    // Calculate bounds
-    double minLat = location.latitude - radiusInDegrees;
-    double maxLat = location.latitude + radiusInDegrees;
-    double minLng = location.longitude - radiusInDegrees;
-    double maxLng = location.longitude + radiusInDegrees;
-
-    // Query for drivers within bounds
+    // Get all online drivers
     QuerySnapshot snapshot = await _firestore.collection('driver_locations')
         .where('isOnline', isEqualTo: true)
         .get();
 
-    List<Map<String, dynamic>> nearbyDrivers = [];
+    List<LocationModel> nearbyDrivers = [];
 
     for (var doc in snapshot.docs) {
       Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
       GeoPoint driverLocation = data['location'] as GeoPoint;
 
-      // Check if driver is within bounds
-      if (driverLocation.latitude >= minLat &&
-          driverLocation.latitude <= maxLat &&
-          driverLocation.longitude >= minLng &&
-          driverLocation.longitude <= maxLng) {
+      // Calculate distance
+      double distance = calculateDistance(
+        location.latitude,
+        location.longitude,
+        driverLocation.latitude,
+        driverLocation.longitude,
+      );
 
-        // Calculate actual distance
-        double distance = calculateDistance(
-          location.latitude,
-          location.longitude,
-          driverLocation.latitude,
-          driverLocation.longitude,
+      // Check if driver is within radius
+      if (distance <= radiusInKm) {
+        // Get driver details
+        DocumentSnapshot driverDoc = await _firestore.collection('users').doc(data['driverId']).get();
+        String driverName = "Driver";
+
+        if (driverDoc.exists) {
+          Map<String, dynamic> driverData = driverDoc.data() as Map<String, dynamic>;
+          driverName = driverData['fullName'] ?? "Driver";
+        }
+
+        LocationModel driverLocationModel = LocationModel(
+          name: driverName,
+          address: "Online Driver",
+          latitude: driverLocation.latitude,
+          longitude: driverLocation.longitude,
+          placeId: data['driverId'],
+          distance: distance,
         );
 
-        if (distance <= radiusInKm) {
-          data['distance'] = distance;
-          nearbyDrivers.add(data);
-        }
+        nearbyDrivers.add(driverLocationModel);
       }
     }
 
     // Sort by distance
-    nearbyDrivers.sort((a, b) => (a['distance'] as double).compareTo(b['distance'] as double));
+    nearbyDrivers.sort((a, b) => (a.distance ?? 0).compareTo(b.distance ?? 0));
 
+    DevLogs.info('Found ${nearbyDrivers.length} nearby drivers');
     return nearbyDrivers;
   }
 
@@ -193,157 +196,117 @@ class LocationService extends GetxService {
     return degrees * (pi / 180);
   }
 
-  // Get place details using Dio and Google Places API
-  Future<Map<String, dynamic>> getPlaceDetails(String placeId) async {
+  Future<LocationModel> getPlaceDetails(String placeId) async {
     try {
-      final response = await _dio.get(
-        '$_placesApiBaseUrl/details/json',
-        queryParameters: {
-          'place_id': placeId,
-          'fields': 'name,formatted_address,geometry',
-          'key': Constants.googleMapsApiKey
-        },
-      );
+      final placeDetails = await _apiService.getPlaceDetails(placeId);
 
-      if (response.statusCode == 200 && response.data['status'] == 'OK') {
-        final place = response.data['result'];
-        return {
-          'placeId': placeId,
-          'name': place['name'],
-          'address': place['formatted_address'] ?? '',
-          'location': {
-            'lat': place['geometry']['location']['lat'] ?? 0.0,
-            'lng': place['geometry']['location']['lng'] ?? 0.0,
-          }
-        };
-      } else {
-        print('Error getting place details: ${response.data['status']}');
-        throw Exception('Failed to get place details: ${response.data['status']}');
-      }
+      return LocationModel(
+        name: placeDetails['name'] ?? '',
+        address: placeDetails['formatted_address'] ?? '',
+        latitude: placeDetails['geometry']['location']['lat'] ?? 0.0,
+        longitude: placeDetails['geometry']['location']['lng'] ?? 0.0,
+        placeId: placeId,
+      );
     } catch (e) {
-      print('Exception getting place details: $e');
+      DevLogs.error('Error getting place details', exception: e);
       throw Exception('Failed to get place details: $e');
     }
   }
 
-  // Search places using Dio and Google Places API
-  Future<List<Map<String, dynamic>>> searchPlaces(String query) async {
+  Future<List<LocationModel>> searchPlaces(String query, [LatLng? location]) async {
     try {
-      Map<String, dynamic> queryParams = {
-        'input': query,
-        'key': Constants.googleMapsApiKey
-      };
-
-      // Add location bias if available
-      if (currentLocation.value != null) {
-        queryParams['location'] = '${currentLocation.value!.latitude},${currentLocation.value!.longitude}';
-        queryParams['radius'] = '50000'; // 50km radius
-        queryParams['strictbounds'] = 'true';
-      }
-
-      final response = await _dio.get(
-        '$_placesApiBaseUrl/autocomplete/json',
-        queryParameters: queryParams,
+      final results = await _apiService.searchPlaces(
+        query,
+        lat: location?.latitude,
+        lng: location?.longitude,
       );
 
-      if (response.statusCode == 200 && response.data['status'] == 'OK') {
-        List<dynamic> predictions = response.data['predictions'];
-        return predictions.map<Map<String, dynamic>>((prediction) {
-          String mainText = '';
-          String secondaryText = '';
-
-          if (prediction['structured_formatting'] != null) {
-            mainText = prediction['structured_formatting']['main_text'] ?? '';
-            secondaryText = prediction['structured_formatting']['secondary_text'] ?? '';
-          }
-
-          return {
-            'placeId': prediction['place_id'],
-            'name': mainText.isNotEmpty ? mainText : prediction['description'],
-            'address': secondaryText,
-          };
-        }).toList();
-      } else {
-        print('Error searching places: ${response.data['status']}');
-        throw Exception('Failed to search places: ${response.data['status']}');
-      }
+      return results.map((place) {
+        return LocationModel(
+          name: place['name'] ?? '',
+          address: place['formatted_address'] ?? '',
+          latitude: place['geometry']['location']['lat'] ?? 0.0,
+          longitude: place['geometry']['location']['lng'] ?? 0.0,
+          placeId: place['place_id'],
+        );
+      }).toList();
     } catch (e) {
-      print('Exception searching places: $e');
+      DevLogs.error('Error searching places', exception: e);
       throw Exception('Failed to search places: $e');
     }
   }
 
-  // Get directions using Dio and Google Directions API
   Future<Map<String, dynamic>> getDirections(LatLng origin, LatLng destination) async {
     try {
-      final response = await _dio.get(
-        '$_directionsApiBaseUrl/json',
-        queryParameters: {
-          'origin': '${origin.latitude},${origin.longitude}',
-          'destination': '${destination.latitude},${destination.longitude}',
-          'mode': 'driving',
-          'key': Constants.googleMapsApiKey
-        },
+      final route = await _apiService.getDirections(
+        origin.latitude,
+        origin.longitude,
+        destination.latitude,
+        destination.longitude,
       );
 
-      if (response.statusCode == 200 && response.data['status'] == 'OK' && response.data['routes'].isNotEmpty) {
-        final route = response.data['routes'][0];
-        final leg = route['legs'][0];
+      final leg = route['legs'][0];
 
-        // Decode polyline
-        final polylinePoints = PolylinePoints();
-        final points = polylinePoints.decodePolyline(route['overview_polyline']['points']);
+      // Extract polyline
+      final polylinePoints = PolylinePoints();
+      final points = polylinePoints.decodePolyline(route['overview_polyline']['points']);
 
-        return {
-          'distance': {
-            'text': leg['distance']['text'],
-            'value': leg['distance']['value'],
+      final List<LatLng> polylineCoordinates = points
+          .map((point) => LatLng(point.latitude, point.longitude))
+          .toList();
+
+      return {
+        'distance': {
+          'text': leg['distance']['text'],
+          'value': leg['distance']['value'],
+        },
+        'duration': {
+          'text': leg['duration']['text'],
+          'value': leg['duration']['value'],
+        },
+        'polylinePoints': polylineCoordinates,
+        'polyline': route['overview_polyline']['points'],
+        'bounds': {
+          'northeast': {
+            'lat': route['bounds']['northeast']['lat'],
+            'lng': route['bounds']['northeast']['lng'],
           },
-          'duration': {
-            'text': leg['duration']['text'],
-            'value': leg['duration']['value'],
+          'southwest': {
+            'lat': route['bounds']['southwest']['lat'],
+            'lng': route['bounds']['southwest']['lng'],
           },
-          'polyline': route['overview_polyline']['points'],
-          'points': points.map((point) => LatLng(point.latitude, point.longitude)).toList(),
-          'startAddress': leg['start_address'],
-          'endAddress': leg['end_address'],
-          'steps': leg['steps'].map<Map<String, dynamic>>((step) => {
-            'distance': step['distance']['text'],
-            'duration': step['duration']['text'],
-            'instructions': step['html_instructions'],
-          }).toList(),
-        };
-      } else {
-        print('Error getting directions: ${response.data['status']}');
-        throw Exception('Failed to get directions: ${response.data['status']}');
-      }
+        },
+      };
     } catch (e) {
-      print('Exception getting directions: $e');
+      DevLogs.error('Error getting directions', exception: e);
       throw Exception('Failed to get directions: $e');
     }
   }
 
-  // Calculate ETA to destination
-  Future<Map<String, dynamic>> calculateETA(LatLng origin, LatLng destination) async {
+  Future<LocationModel> reverseGeocode(LatLng location) async {
     try {
-      final directions = await getDirections(origin, destination);
-      return {
-        'duration': directions['duration'],
-        'distance': directions['distance'],
-      };
-    } catch (e) {
-      print('Exception calculating ETA: $e');
-      return {
-        'duration': {'text': 'Unknown', 'value': 0},
-        'distance': {'text': 'Unknown', 'value': 0},
-      };
-    }
-  }
+      final result = await _apiService.reverseGeocode(
+        location.latitude,
+        location.longitude,
+      );
 
-  @override
-  void onClose() {
-    stopLocationUpdates();
-    _locationStreamController.close();
-    super.onClose();
+      return LocationModel(
+        name: result['address_components'][0]['long_name'] ?? 'Current Location',
+        address: result['formatted_address'] ?? '',
+        latitude: location.latitude,
+        longitude: location.longitude,
+        placeId: result['place_id'],
+      );
+    } catch (e) {
+      DevLogs.error('Error reverse geocoding', exception: e);
+
+      // Fallback to a basic location model
+      return LocationModel(
+        name: 'Current Location',
+        address: 'Unknown Address',
+        latitude: location.latitude,
+        longitude: location.longitude,
+      );
+    }
   }
 }

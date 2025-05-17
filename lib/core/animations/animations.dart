@@ -1,108 +1,75 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 
-/// Animation presets for consistent animations across the app
-class AppAnimations {
-  // Page transitions
-  static List<Effect> get pageTransition => [
-        FadeEffect(
-          duration: 300.ms,
-          curve: Curves.easeOut,
-        ),
-        SlideEffect(
-          duration: 400.ms,
-          begin: const Offset(0.1, 0),
-          end: Offset.zero,
-          curve: Curves.easeOutQuart,
-        ),
-      ];
+class AnimatedCard extends StatefulWidget {
+  final Widget child;
+  final Duration delay;
+  final Duration duration;
+  final Curve curve;
+  final double offset;
 
-  // Button tap animation
-  static List<Effect> get buttonTap => [
-        ScaleEffect(
-          duration: 150.ms,
-          begin: const Offset(1, 1),
-          end: const Offset(0.95, 0.95),
-          curve: Curves.easeInOut,
-        ),
-      ];
+  const AnimatedCard({
+    super.key,
+    required this.child,
+    this.delay = Duration.zero,
+    this.duration = const Duration(milliseconds: 300),
+    this.curve = Curves.easeOut,
+    this.offset = 100.0,
+  });
 
-  // Card entry animation
-  static List<Effect> get cardEntry => [
-        FadeEffect(
-          duration: 400.ms,
-          curve: Curves.easeOut,
-        ),
-        SlideEffect(
-          duration: 500.ms,
-          begin: const Offset(0, 0.1),
-          end: Offset.zero,
-          curve: Curves.easeOutQuart,
-        ),
-      ];
+  @override
+  State<AnimatedCard> createState() => _AnimatedCardState();
+}
 
-  // Map marker animation
-  static List<Effect> get mapMarker => [
-        ScaleEffect(
-          duration: 300.ms,
-          begin: const Offset(0.5, 0.5),
-          end: const Offset(1, 1),
-          curve: Curves.elasticOut,
-        ),
-        FadeEffect(
-          duration: 200.ms,
-          curve: Curves.easeOut,
-        ),
-      ];
+class _AnimatedCardState extends State<AnimatedCard> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
 
-  // Staggered list item animation
-  static List<Effect> staggeredListItem(int index) => [
-        FadeEffect(
-          duration: 400.ms,
-          delay: (50 * index).ms,
-          curve: Curves.easeOut,
-        ),
-        SlideEffect(
-          duration: 500.ms,
-          delay: (50 * index).ms,
-          begin: const Offset(0, 0.1),
-          end: Offset.zero,
-          curve: Curves.easeOutQuart,
-        ),
-      ];
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: widget.duration,
+    );
 
-  // Pulse animation for attention
-  static List<Effect> get pulse => [
-        ScaleEffect(
-          duration: 600.ms,
-          begin: const Offset(1, 1),
-          end: const Offset(1.05, 1.05),
-          curve: Curves.easeInOut,
-        )
-      ];
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _controller,
+      curve: widget.curve,
+    ));
 
-  // Shimmer loading effect
-  static List<Effect> get shimmer => [
-        ShimmerEffect(
-          duration: 1200.ms,
-          color: Colors.white.withOpacity(0.5),
-          curve: Curves.easeInOut,
-        )
-      ];
+    _slideAnimation = Tween<Offset>(
+      begin: Offset(0, widget.offset / 100),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _controller,
+      curve: widget.curve,
+    ));
 
-  // Success animation
-  static List<Effect> get success => [
-        ScaleEffect(
-          duration: 200.ms,
-          begin: const Offset(0.5, 0.5),
-          end: const Offset(1, 1),
-          curve: Curves.elasticOut,
-        ),
-        RotateEffect(
-          duration: 400.ms,
-          begin: -0.1,
-          end: 0,
-          curve: Curves.elasticOut,
-        ),
-      ];
+    Future.delayed(widget.delay, () {
+      if (mounted) {
+        _controller.forward();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: SlideTransition(
+        position: _slideAnimation,
+        child: widget.child,
+      ),
+    );
+  }
 }

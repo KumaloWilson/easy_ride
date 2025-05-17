@@ -90,9 +90,9 @@ class ETACard extends StatelessWidget {
                   ),
               ],
             ),
-
+            
             const SizedBox(height: 16),
-
+            
             // ETA information
             if (status == 'searching')
               Center(
@@ -144,7 +144,7 @@ class ETACard extends StatelessWidget {
                   const Divider(),
                   const SizedBox(height: 8),
                   Text(
-                    status == 'accepted'
+                    status == 'accepted' 
                         ? 'Driver is on the way to pick you up'
                         : 'Driver has arrived at your location',
                     style: TextStyle(
@@ -155,62 +155,62 @@ class ETACard extends StatelessWidget {
                 ],
               )
             else if (status == 'started')
-                Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        _buildETAItem(
-                          icon: Icons.location_on,
-                          title: 'Distance',
-                          value: '${distanceToDestination?.toStringAsFixed(1) ?? "0.0"} km',
-                        ),
-                        Container(
-                          height: 40,
-                          width: 1,
-                          color: Colors.grey[300],
-                        ),
-                        _buildETAItem(
-                          icon: Icons.access_time,
-                          title: 'ETA',
-                          value: '${durationToDestination?.toStringAsFixed(0) ?? "0"} min',
-                          isHighlighted: true,
-                        ),
-                      ],
+              Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _buildETAItem(
+                        icon: Icons.location_on,
+                        title: 'Distance',
+                        value: '${distanceToDestination?.toStringAsFixed(1) ?? "0.0"} km',
+                      ),
+                      Container(
+                        height: 40,
+                        width: 1,
+                        color: Colors.grey[300],
+                      ),
+                      _buildETAItem(
+                        icon: Icons.access_time,
+                        title: 'ETA',
+                        value: '${durationToDestination?.toStringAsFixed(0) ?? "0"} min',
+                        isHighlighted: true,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  const Divider(),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'You are on your way to the destination',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w500,
                     ),
-                    const SizedBox(height: 16),
-                    const Divider(),
+                  ),
+                ],
+              )
+            else if (status == 'completed')
+              Center(
+                child: Column(
+                  children: [
+                    SizedBox(
+                      height: 80,
+                      width: 80,
+                      child: Lottie.asset(
+                        'assets/lottie/completed.json',
+                        repeat: false,
+                      ),
+                    ),
                     const SizedBox(height: 8),
                     const Text(
-                      'You are on your way to the destination',
+                      'Ride completed successfully!',
                       style: TextStyle(
                         fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
-                )
-              else if (status == 'completed')
-                  Center(
-                    child: Column(
-                      children: [
-                        SizedBox(
-                          height: 80,
-                          width: 80,
-                          child: Lottie.asset(
-                            'assets/lottie/completed.json',
-                            repeat: false,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Ride completed successfully!',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                ),
+              ),
           ],
         ),
       ),

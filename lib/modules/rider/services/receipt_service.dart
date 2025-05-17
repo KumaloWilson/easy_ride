@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -8,6 +7,8 @@ import 'package:easy_ride/modules/rider/models/fare_model.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:get/get.dart';
+import 'package:flutter/material.dart';
+import 'package:easy_ride/core/utils/logs.dart';
 
 class ReceiptService extends GetxService {
   Future<ReceiptService> init() async {
@@ -95,8 +96,8 @@ class ReceiptService extends GetxService {
               pw.SizedBox(height: 10),
 
               _buildDetailRow('Ride Type', ride.rideType),
-              _buildDetailRow('Pickup', ride.pickup['name'] ?? 'N/A'),
-              _buildDetailRow('Dropoff', ride.dropoff['name'] ?? 'N/A'),
+              _buildDetailRow('Pickup', ride.pickup?.name ?? ""),
+              _buildDetailRow('Dropoff', ride.dropoff?.name ?? ""),
               _buildDetailRow('Distance', '${fare.distance.toStringAsFixed(1)} km'),
               _buildDetailRow('Duration', '${fare.duration.toStringAsFixed(0)} min'),
               _buildDetailRow('Payment Method', ride.paymentMethod.toUpperCase()),
@@ -262,6 +263,7 @@ class ReceiptService extends GetxService {
         text: 'Here is your receipt for your recent ride with Easy Ride.',
       );
     } catch (e) {
+      DevLogs.error('Failed to share receipt', exception: e);
       Get.snackbar(
         'Error',
         'Failed to share receipt: $e',

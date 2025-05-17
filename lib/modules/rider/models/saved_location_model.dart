@@ -1,6 +1,5 @@
-import 'package:flutter/foundation.dart';
 
-enum LocationType { home, work, favorite }
+import '../../../models/location_model.dart';
 
 class SavedLocationModel {
   final String id;
@@ -9,6 +8,8 @@ class SavedLocationModel {
   final double latitude;
   final double longitude;
   final LocationType type;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
 
   SavedLocationModel({
     required this.id,
@@ -17,88 +18,54 @@ class SavedLocationModel {
     required this.latitude,
     required this.longitude,
     required this.type,
+    this.createdAt,
+    this.updatedAt,
   });
 
-  factory SavedLocationModel.fromMap(Map<String, dynamic> map) {
-    try {
-      return SavedLocationModel(
-        id: map['id'] ?? '',
-        name: map['name'] ?? '',
-        address: map['address'] ?? '',
-        latitude: (map['latitude'] is double)
-            ? map['latitude']
-            : (map['latitude'] != null)
-            ? double.tryParse(map['latitude'].toString()) ?? 0.0
-            : 0.0,
-        longitude: (map['longitude'] is double)
-            ? map['longitude']
-            : (map['longitude'] != null)
-            ? double.tryParse(map['longitude'].toString()) ?? 0.0
-            : 0.0,
-        type: _parseLocationType(map['type']),
-      );
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error parsing SavedLocationModel: $e');
-      }
-      return SavedLocationModel(
-        id: map['id'] ?? '',
-        name: map['name'] ?? '',
-        address: map['address'] ?? '',
-        latitude: 0.0,
-        longitude: 0.0,
-        type: LocationType.favorite,
-      );
-    }
-  }
-
-  static LocationType _parseLocationType(dynamic type) {
-    if (type is int) {
-      return LocationType.values[type];
-    } else if (type is String) {
-      try {
-        return LocationType.values.firstWhere(
-              (e) => e.toString().split('.').last.toLowerCase() == type.toLowerCase(),
-          orElse: () => LocationType.favorite,
-        );
-      } catch (_) {
-        return LocationType.favorite;
-      }
-    }
-    return LocationType.favorite;
+  factory SavedLocationModel.fromMap(Map<String, dynamic> map, String id) {
+    return SavedLocationModel(
+      id: id,
+      name: map['name'] ?? '',
+      address: map['address'] ?? '',
+      latitude: (map['latitude'] ?? 0.0).toDouble(),
+      longitude: (map['longitude'] ?? 0.0).toDouble(),
+      type: _parseLocationType(map['type'] ?? 'favorite'),
+      createdAt: map['createdAt'] != null
+          ? (map['createdAt'] is DateTime
+          ? map['createdAt']
+          : DateTime.parse(map['createdAt'].toString()))
+          : null,
+      updatedAt: map['updatedAt'] != null
+          ? (map['updatedAt'] is DateTime
+          ? map['updatedAt']
+          : DateTime.parse(map['updatedAt'].toString()))
+          : null,
+    );
   }
 
   Map<String, dynamic> toMap() {
     return {
-      'id': id,
       'name': name,
       'address': address,
       'latitude': latitude,
       'longitude': longitude,
       'type': type.toString().split('.').last,
+      'createdAt': createdAt?.toIso8601String(),
+      'updatedAt': updatedAt?.toIso8601String(),
     };
   }
 
-  SavedLocationModel copyWith({
-    String? id,
-    String? name,
-    String? address,
-    double? latitude,
-    double? longitude,
-    LocationType? type,
-  }) {
-    return SavedLocationModel(
-      id: id ?? this.id,
-      name: name ?? this.name,
-      address: address ?? this.address,
-      latitude: latitude ?? this.latitude,
-      longitude: longitude ?? this.longitude,
-      type: type ?? this.type,
-    );
-  }
-
-  @override
-  String toString() {
-    return 'SavedLocationModel(id: $id, name: $name, address: $address, latitude: $latitude, longitude: $longitude, type: $type)';
+  static LocationType _parseLocationType(String type) {
+    switch (type) {
+      case 'home':
+        return LocationType.home;
+      case 'work':
+        return LocationType.work;
+      case 'recent':
+        return LocationType.recent;
+      case 'favorite':
+      default:
+        return LocationType.favorite;
+    }
   }
 }

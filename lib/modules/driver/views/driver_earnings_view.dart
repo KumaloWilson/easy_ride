@@ -160,7 +160,7 @@ class DriverEarningsView extends GetView<DriverController> {
                       barTouchData: BarTouchData(
                         enabled: true,
                         touchTooltipData: BarTouchTooltipData(
-                          // tooltipBgColor: Colors.blueGrey,
+                          //tooltipBgColor: Colors.blueGrey,
                           getTooltipItem: (group, groupIndex, rod, rodIndex) {
                             return BarTooltipItem(
                               '\$${rod.toY.toStringAsFixed(2)}',
@@ -341,7 +341,7 @@ class DriverEarningsView extends GetView<DriverController> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${ride.pickup['name']} to ${ride.dropoff['name']}',
+                  '${ride.pickup!.name} to ${ride.dropoff!.name}',
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                   ),

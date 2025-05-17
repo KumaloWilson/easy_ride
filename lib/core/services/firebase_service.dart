@@ -1,16 +1,18 @@
 import 'package:get/get.dart';
 import 'package:cloud_firestore/cloud_firestore.dart' as firestore;
-import 'package:firebase_database/firebase_database.dart' as database;
+import 'package:firebase_database/firebase_database.dart';
+
+import '../utils/logs.dart';
 
 class FirebaseService extends GetxService {
   final firestore.FirebaseFirestore _firestore = firestore.FirebaseFirestore.instance;
-  final database.FirebaseDatabase _database = database.FirebaseDatabase.instance;
+  final FirebaseDatabase _database = FirebaseDatabase.instance;
 
   Future<FirebaseService> init() async {
     // Set persistence for Firestore
-    _firestore.settings = firestore.Settings(persistenceEnabled: true);
+    _firestore.settings.persistenceEnabled;
 
-    // Set persistence for Realtime Database (this is synchronous, not async)
+    // Set persistence for Realtime Database
     _database.setPersistenceEnabled(true);
 
     return this;
@@ -40,6 +42,24 @@ class FirebaseService extends GetxService {
   }) async {
     final reference = _firestore.doc(path);
     await reference.update(data);
+  }
+
+  // Get a collection
+  Future<firestore.QuerySnapshot> getCollection({
+    required String path,
+    firestore.Query Function(firestore.Query query)? queryBuilder,
+  }) async {
+    try {
+      firestore.Query query = _firestore.collection(path);
+      if (queryBuilder != null) {
+        query = queryBuilder(query);
+      }
+      DevLogs.debug('Getting collection at path: $path');
+      return await query.get();
+    } catch (e) {
+      DevLogs.error('Error getting collection', exception: e);
+      throw e;
+    }
   }
 
   Future<void> deleteData({required String path}) async {
@@ -79,7 +99,7 @@ class FirebaseService extends GetxService {
   }
 
   // Realtime Database methods
-  database.DatabaseReference databaseRef(String path) {
+  DatabaseReference databaseRef(String path) {
     return _database.ref(path);
   }
 
@@ -89,6 +109,17 @@ class FirebaseService extends GetxService {
   }) async {
     final reference = _database.ref(path);
     await reference.set(data);
+  }
+
+  // Get a document
+  Future<firestore.DocumentSnapshot> getDocument({required String path}) async {
+    try {
+      DevLogs.debug('Getting document at path: $path');
+      return await _firestore.doc(path).get();
+    } catch (e) {
+      DevLogs.error('Error getting document', exception: e);
+      throw e;
+    }
   }
 
   Future<void> updateRealtimeData({
@@ -104,7 +135,7 @@ class FirebaseService extends GetxService {
     await reference.remove();
   }
 
-  Stream<database.DatabaseEvent> realtimeStream({required String path}) {
+  Stream<DatabaseEvent> realtimeStream({required String path}) {
     final reference = _database.ref(path);
     return reference.onValue;
   }

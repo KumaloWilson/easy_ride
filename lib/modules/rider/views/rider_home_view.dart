@@ -1,20 +1,30 @@
+import 'package:easy_ride/models/ride_model.dart';
+import 'package:easy_ride/modules/rider/views/ride_details_view.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:lottie/lottie.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../models/location_model.dart';
 import '../controllers/rider_controller.dart';
 import '../models/saved_location_model.dart';
+import '../views/ride_booking_view.dart';
+import '../views/ride_history_view.dart';
+import '../../profile/views/profile_view.dart';
+import '../widgets/rider_sidebar.dart';
 
 class RiderHomeView extends StatelessWidget {
   final RiderController controller = Get.find<RiderController>();
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   RiderHomeView({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: _scaffoldKey,
+      drawer: RiderSidebar(),
       body: SafeArea(
         child: Stack(
           children: [
@@ -75,7 +85,7 @@ class RiderHomeView extends StatelessWidget {
             child: IconButton(
               icon: const Icon(Icons.menu),
               onPressed: () {
-                Scaffold.of(context).openDrawer();
+                _scaffoldKey.currentState?.openDrawer();
               },
             ),
           ),
@@ -83,7 +93,7 @@ class RiderHomeView extends StatelessWidget {
           Expanded(
             child: GestureDetector(
               onTap: () {
-                Get.toNamed('/rider/booking');
+                Get.to(() => RideBookingView());
               },
               child: Container(
                 padding: const EdgeInsets.symmetric(
@@ -132,7 +142,7 @@ class RiderHomeView extends StatelessWidget {
             child: IconButton(
               icon: const Icon(Icons.history),
               onPressed: () {
-                Get.toNamed('/rider/history');
+                Get.to(() => RideHistoryView());
               },
             ),
           ),
@@ -182,7 +192,7 @@ class RiderHomeView extends StatelessWidget {
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () {
-                      Get.toNamed('/rider/booking');
+                      Get.to(() => RideBookingView());
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.primaryColor,
@@ -325,13 +335,16 @@ class RiderHomeView extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
       ),
       onTap: () {
-        controller.setDropoffLocation({
-          'name': location.name,
-          'address': location.address,
-          'latitude': location.latitude,
-          'longitude': location.longitude,
-        });
-        Get.toNamed('/rider/booking');
+        controller.setDropoffLocation(
+
+          LocationModel(
+            name: location.name,
+            address: location.address,
+            latitude: location.latitude,
+            longitude: location.longitude,
+          ),
+        );
+        Get.to(() => RideBookingView());
       },
     );
   }
@@ -358,7 +371,7 @@ class RiderHomeView extends StatelessWidget {
               ),
               TextButton(
                 onPressed: () {
-                  Get.toNamed('/rider/history');
+                  Get.to(() => RideHistoryView());
                 },
                 child: const Text('See All'),
               ),
@@ -371,7 +384,7 @@ class RiderHomeView extends StatelessWidget {
             itemCount: recentRides.length > 3 ? 3 : recentRides.length,
             itemBuilder: (context, index) {
               final ride = recentRides[index];
-              return _buildRecentRideItem(context, ride as Map<String, dynamic>);
+              return _buildRecentRideItem(context, ride);
             },
           ),
         ],
@@ -379,7 +392,7 @@ class RiderHomeView extends StatelessWidget {
     });
   }
 
-  Widget _buildRecentRideItem(BuildContext context, Map<String, dynamic> ride) {
+  Widget _buildRecentRideItem(BuildContext context, RideModel ride) {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(
         horizontal: 8,
@@ -393,24 +406,24 @@ class RiderHomeView extends StatelessWidget {
         ),
       ),
       title: Text(
-        ride['dropoff']?['name'] ?? 'Unknown destination',
+        ride.dropoff?.name ?? 'Unknown destination',
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: const TextStyle(fontWeight: FontWeight.bold),
       ),
       subtitle: Text(
-        'From: ${ride['pickup']?['name'] ?? 'Unknown pickup'}',
+        'From: ${ride.pickup?.name ?? 'Unknown pickup'}',
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
       trailing: Text(
-        '\$${(ride['fare'] ?? 0.0).toStringAsFixed(2)}',
+        '\$${(ride.fare ?? 0.0).toStringAsFixed(2)}',
         style: const TextStyle(fontWeight: FontWeight.bold),
       ),
       onTap: () {
-        controller.setPickupLocation(ride['pickup'] ?? {});
-        controller.setDropoffLocation(ride['dropoff'] ?? {});
-        Get.toNamed('/rider/booking');
+        controller.setPickupLocation(ride.pickup!);
+        controller.setDropoffLocation(ride.dropoff!);
+        Get.to(() => RideBookingView());
       },
     );
   }
@@ -478,7 +491,7 @@ class RiderHomeView extends StatelessWidget {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        activeRide.dropoff['name'] ?? 'Unknown destination',
+                        activeRide.dropoff?.name ?? 'Unknown destination',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -488,7 +501,7 @@ class RiderHomeView extends StatelessWidget {
                 const SizedBox(height: 16),
                 ElevatedButton(
                   onPressed: () {
-                    Get.toNamed('/rider/ride-details');
+                    Get.to(() => RideDetailsView());
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.primaryColor,

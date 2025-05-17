@@ -5,7 +5,6 @@ enum FlagType {
   safety,
   inappropriate,
   spam,
-  conduct,
   other,
 }
 
@@ -109,8 +108,6 @@ class FlagModel {
         return 'inappropriate';
       case FlagType.spam:
         return 'spam';
-      case FlagType.conduct:
-        return 'conduct';
       case FlagType.other:
         return 'other';
     }

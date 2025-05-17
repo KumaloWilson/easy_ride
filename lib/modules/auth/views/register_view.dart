@@ -11,7 +11,7 @@ class RegisterView extends GetView<AuthController> {
   @override
   Widget build(BuildContext context) {
     final PreferencesService prefsService = Get.find<PreferencesService>();
-
+    
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -25,7 +25,7 @@ class RegisterView extends GetView<AuthController> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 20),
-
+              
               // Header
               Text(
                 'Create Account',
@@ -36,7 +36,7 @@ class RegisterView extends GetView<AuthController> {
                 ),
               ),
               const SizedBox(height: 8),
-
+              
               // Role display
               Obx(() => Text(
                 'Signing up as a ${prefsService.userRole.value.capitalizeFirst}',
@@ -46,7 +46,7 @@ class RegisterView extends GetView<AuthController> {
                 ),
               )),
               const SizedBox(height: 40),
-
+              
               // Email field
               TextField(
                 onChanged: (value) => controller.email.value = value,
@@ -60,7 +60,7 @@ class RegisterView extends GetView<AuthController> {
                 ),
               ),
               const SizedBox(height: 20),
-
+              
               // Password field
               Obx(() => TextField(
                 onChanged: (value) => controller.password.value = value,
@@ -75,7 +75,7 @@ class RegisterView extends GetView<AuthController> {
                 ),
               )),
               const SizedBox(height: 30),
-
+              
               // Sign up button
               Obx(() => ElevatedButton(
                 onPressed: controller.isLoading.value
@@ -91,15 +91,15 @@ class RegisterView extends GetView<AuthController> {
                 child: controller.isLoading.value
                     ? const CircularProgressIndicator(color: Colors.white)
                     : const Text(
-                  'Sign Up',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                        'Sign Up',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
               )),
               const SizedBox(height: 20),
-
+              
               // Divider
               Row(
                 children: const [
@@ -112,7 +112,7 @@ class RegisterView extends GetView<AuthController> {
                 ],
               ),
               const SizedBox(height: 20),
-
+              
               // Phone sign up button
               OutlinedButton.icon(
                 onPressed: () => Get.toNamed(Routes.otpVerification),
@@ -127,7 +127,7 @@ class RegisterView extends GetView<AuthController> {
                 label: const Text('Sign Up with Phone Number'),
               ),
               const SizedBox(height: 40),
-
+              
               // Login link
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,

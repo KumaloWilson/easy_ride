@@ -1,9 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:easy_ride/models/ride_model.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import 'package:lottie/lottie.dart';
+
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/shimmer_loading.dart';
+import '../../../models/ride_status.dart';
 import '../controllers/rider_controller.dart';
 
 class RideHistoryView extends StatefulWidget {
@@ -117,11 +121,11 @@ class _RideHistoryViewState extends State<RideHistoryView> {
         onRefresh: _refreshRides,
         child: Obx(() {
           final rides = controller.rideHistory;
-
+          
           if (rides.isEmpty && !_isLoading) {
             return _buildEmptyState();
           }
-
+          
           return ListView.builder(
             controller: _scrollController,
             padding: const EdgeInsets.all(16),
@@ -135,8 +139,8 @@ class _RideHistoryViewState extends State<RideHistoryView> {
                   ),
                 );
               }
-
-              return _buildRideHistoryCard(context, rides[index] as Map<String, dynamic>, index);
+              
+              return _buildRideHistoryCard(context, rides[index], index);
             },
           );
         }),
@@ -182,14 +186,14 @@ class _RideHistoryViewState extends State<RideHistoryView> {
     );
   }
 
-  Widget _buildRideHistoryCard(BuildContext context, Map<String, dynamic> ride, int index) {
+  Widget _buildRideHistoryCard(BuildContext context, RideModel ride, int index) {
     final dateFormat = DateFormat('MMM dd, yyyy • hh:mm a');
     final formattedDate = dateFormat.format(
-        ride['createdAt'] != null
-            ? (ride['createdAt'] as Timestamp).toDate()
-            : DateTime.now()
+      ride.createdAt != null
+          ? (ride.createdAt as Timestamp).toDate()
+          : DateTime.now()
     );
-
+    
     return Padding(
       padding: const EdgeInsets.only(bottom: 16.0),
       child: Card(
@@ -211,17 +215,17 @@ class _RideHistoryViewState extends State<RideHistoryView> {
                     Text(
                       formattedDate,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.grey[600],
-                      ),
+                            color: Colors.grey[600],
+                          ),
                     ),
-                    _buildStatusBadge(context, ride['status'] ?? 'completed'),
+                    _buildStatusBadge(context, ride.status ?? 'completed'),
                   ],
                 ),
                 const SizedBox(height: 16),
                 _buildLocationRow(
                   context,
                   Icons.my_location,
-                  ride['pickup']?['name'] ?? 'Unknown pickup',
+                  ride.pickup?.name ?? 'Unknown pickup',
                 ),
                 const SizedBox(height: 8),
                 _buildDivider(),
@@ -229,21 +233,21 @@ class _RideHistoryViewState extends State<RideHistoryView> {
                 _buildLocationRow(
                   context,
                   Icons.location_on,
-                  ride['dropoff']?['name'] ?? 'Unknown destination',
+                  ride.pickup?.name ?? 'Unknown destination',
                 ),
                 const SizedBox(height: 16),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      ride['rideType'] ?? 'Standard',
+                      ride.rideType ?? 'Standard',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                     Text(
-                      '\$${(ride['fare'] ?? 0.0).toStringAsFixed(2)}',
+                      '\$${(ride.fare ?? 0.0).toStringAsFixed(2)}',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                            fontWeight: FontWeight.bold,
+                          ),
                     ),
                   ],
                 ),
@@ -258,7 +262,7 @@ class _RideHistoryViewState extends State<RideHistoryView> {
   Widget _buildStatusBadge(BuildContext context, String status) {
     Color color;
     String text;
-
+    
     switch (status) {
       case 'completed':
         color = Colors.green;
@@ -276,7 +280,7 @@ class _RideHistoryViewState extends State<RideHistoryView> {
         color = Colors.orange;
         text = status.capitalize ?? 'Unknown';
     }
-
+    
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
@@ -296,10 +300,10 @@ class _RideHistoryViewState extends State<RideHistoryView> {
   }
 
   Widget _buildLocationRow(
-      BuildContext context,
-      IconData icon,
-      String address,
-      ) {
+    BuildContext context,
+    IconData icon,
+    String address,
+  ) {
     return Row(
       children: [
         Icon(
@@ -333,7 +337,7 @@ class _RideHistoryViewState extends State<RideHistoryView> {
     );
   }
 
-  void _showRideDetails(BuildContext context, Map<String, dynamic> ride) {
+  void _showRideDetails(BuildContext context, RideModel ride) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -365,51 +369,51 @@ class _RideHistoryViewState extends State<RideHistoryView> {
                 Text(
                   'Ride Details',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
                 const SizedBox(height: 16),
-                _buildDetailRow(context, 'Date & Time',
-                    DateFormat('MMM dd, yyyy • hh:mm a').format(
-                        ride['createdAt'] != null
-                            ? (ride['createdAt'] as Timestamp).toDate()
-                            : DateTime.now()
-                    )),
+                _buildDetailRow(context, 'Date & Time', 
+                  DateFormat('MMM dd, yyyy • hh:mm a').format(
+                    ride.createdAt != null
+                        ? (ride.createdAt as Timestamp).toDate()
+                        : DateTime.now()
+                  )),
                 const SizedBox(height: 8),
-                _buildDetailRow(context, 'Status',
-                    (ride['status'] ?? 'Unknown').toString().capitalize ?? 'Unknown'),
+                _buildDetailRow(context, 'Status', 
+                  (ride.status ?? 'Unknown').toString().capitalize ?? 'Unknown'),
                 const SizedBox(height: 8),
-                _buildDetailRow(context, 'Ride Type',
-                    ride['rideType'] ?? 'Standard'),
+                _buildDetailRow(context, 'Ride Type', 
+                  ride.rideType ?? 'Standard'),
                 const SizedBox(height: 8),
-                _buildDetailRow(context, 'Fare',
-                    '\$${(ride['fare'] ?? 0.0).toStringAsFixed(2)}'),
+                _buildDetailRow(context, 'Fare', 
+                  '\$${(ride.fare ?? 0.0).toStringAsFixed(2)}'),
                 const SizedBox(height: 16),
                 const Divider(),
                 const SizedBox(height: 16),
                 Text(
                   'Pickup Location',
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
                 const SizedBox(height: 8),
-                Text(ride['pickup']?['name'] ?? 'Unknown pickup'),
+                Text(ride.pickup?.name ?? 'Unknown pickup'),
                 const SizedBox(height: 16),
                 Text(
                   'Dropoff Location',
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
                 const SizedBox(height: 8),
-                Text(ride['dropoff']?['name'] ?? 'Unknown destination'),
+                Text(ride.dropoff?.name ?? 'Unknown destination'),
                 const SizedBox(height: 24),
-                if (ride['status'] == 'completed')
+                if (ride.status == 'completed')
                   _buildReceiptButton(context, ride),
                 const SizedBox(height: 16),
-                if (ride['driverId'] != null && ride['status'] == 'completed')
-                  _buildDriverInfo(ride['driverId']),
+                if (ride.driverId != null && ride.status == 'completed')
+                  _buildDriverInfo(ride.driverId!),
               ],
             ),
           ),
@@ -425,20 +429,20 @@ class _RideHistoryViewState extends State<RideHistoryView> {
         Text(
           label,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: Colors.grey[600],
-          ),
+                color: Colors.grey[600],
+              ),
         ),
         Text(
           value,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+                fontWeight: FontWeight.bold,
+              ),
         ),
       ],
     );
   }
 
-  Widget _buildReceiptButton(BuildContext context, Map<String, dynamic> ride) {
+  Widget _buildReceiptButton(BuildContext context, RideModel ride) {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton.icon(
@@ -446,7 +450,7 @@ class _RideHistoryViewState extends State<RideHistoryView> {
           // Show receipt
           Get.snackbar(
             'Receipt',
-            'Viewing receipt for ride ${ride['id']}',
+            'Viewing receipt for ride ${ride.id}',
             snackPosition: SnackPosition.BOTTOM,
           );
         },
@@ -471,8 +475,8 @@ class _RideHistoryViewState extends State<RideHistoryView> {
         Text(
           'Driver Information',
           style: Theme.of(context).textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+                fontWeight: FontWeight.bold,
+              ),
         ),
         const SizedBox(height: 16),
         Row(
@@ -489,8 +493,8 @@ class _RideHistoryViewState extends State<RideHistoryView> {
                   Text(
                     'John Driver',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                          fontWeight: FontWeight.bold,
+                        ),
                   ),
                   const SizedBox(height: 4),
                   Row(

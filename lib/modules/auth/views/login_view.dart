@@ -11,7 +11,7 @@ class LoginView extends GetView<AuthController> {
   @override
   Widget build(BuildContext context) {
     final PreferencesService prefsService = Get.find<PreferencesService>();
-
+    
     return Scaffold(
       body: SafeArea(
         child: SingleChildScrollView(
@@ -20,7 +20,7 @@ class LoginView extends GetView<AuthController> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 60),
-
+              
               // Logo
               Center(
                 child: Container(
@@ -43,7 +43,7 @@ class LoginView extends GetView<AuthController> {
                 ),
               ),
               const SizedBox(height: 40),
-
+              
               // Header
               Text(
                 'Welcome Back',
@@ -55,7 +55,7 @@ class LoginView extends GetView<AuthController> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
-
+              
               // Role display
               Obx(() => Text(
                 prefsService.userRole.value.isNotEmpty
@@ -68,7 +68,7 @@ class LoginView extends GetView<AuthController> {
                 textAlign: TextAlign.center,
               )),
               const SizedBox(height: 40),
-
+              
               // Email field
               TextField(
                 onChanged: (value) => controller.email.value = value,
@@ -82,7 +82,7 @@ class LoginView extends GetView<AuthController> {
                 ),
               ),
               const SizedBox(height: 20),
-
+              
               // Password field
               Obx(() => TextField(
                 onChanged: (value) => controller.password.value = value,
@@ -97,7 +97,7 @@ class LoginView extends GetView<AuthController> {
                 ),
               )),
               const SizedBox(height: 16),
-
+              
               // Forgot password
               Align(
                 alignment: Alignment.centerRight,
@@ -114,7 +114,7 @@ class LoginView extends GetView<AuthController> {
                 ),
               ),
               const SizedBox(height: 20),
-
+              
               // Login button
               Obx(() => ElevatedButton(
                 onPressed: controller.isLoading.value
@@ -130,15 +130,15 @@ class LoginView extends GetView<AuthController> {
                 child: controller.isLoading.value
                     ? const CircularProgressIndicator(color: Colors.white)
                     : const Text(
-                  'Log In',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                        'Log In',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
               )),
               const SizedBox(height: 20),
-
+              
               // Divider
               Row(
                 children: const [
@@ -151,7 +151,7 @@ class LoginView extends GetView<AuthController> {
                 ],
               ),
               const SizedBox(height: 20),
-
+              
               // Phone login button
               OutlinedButton.icon(
                 onPressed: () => Get.toNamed(Routes.otpVerification),
@@ -166,7 +166,7 @@ class LoginView extends GetView<AuthController> {
                 label: const Text('Log In with Phone Number'),
               ),
               const SizedBox(height: 40),
-
+              
               // Register link
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -184,7 +184,7 @@ class LoginView extends GetView<AuthController> {
                   ),
                 ],
               ),
-
+              
               // Debug button in development mode
               if (true) // Change to a debug flag in production
                 Padding(

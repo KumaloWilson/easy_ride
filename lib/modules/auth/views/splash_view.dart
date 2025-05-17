@@ -16,61 +16,61 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
-
+  
   @override
   void initState() {
     super.initState();
-
+    
     // Initialize animations
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     );
-
+    
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _animationController,
         curve: Interval(0.0, 0.5, curve: Curves.easeIn),
       ),
     );
-
+    
     _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
       CurvedAnimation(
         parent: _animationController,
         curve: Interval(0.0, 0.5, curve: Curves.easeOut),
       ),
     );
-
+    
     _animationController.forward();
-
+    
     // Navigate after animation completes
     Future.delayed(const Duration(milliseconds: 2500), () {
       _navigateToNextScreen();
     });
   }
-
+  
   @override
   void dispose() {
     _animationController.dispose();
     super.dispose();
   }
-
+  
   void _navigateToNextScreen() {
     try {
       final PreferencesService prefsService = Get.find<PreferencesService>();
       final AuthController authController = Get.find<AuthController>();
-
+      
       print('Navigating from splash: isFirstLaunch=${prefsService.isFirstLaunch.value}, '
           'introCompleted=${prefsService.introCompleted.value}, '
           'isLoggedIn=${authController.isLoggedIn}');
-
+      
       // Check if it's first launch
       if (prefsService.isFirstLaunch.value) {
         print('First launch - going to role selection');
         Get.offAllNamed(Routes.roleSelection);
         return;
       }
-
+      
       // Check if intro is completed
       if (!prefsService.introCompleted.value) {
         // Navigate to appropriate intro screen based on saved role
@@ -83,7 +83,7 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
         }
         return;
       }
-
+      
       // Check authentication status
       if (authController.isLoggedIn) {
         if (authController.currentUser.value == null) {
@@ -164,7 +164,7 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
                       ),
                     ),
                     const SizedBox(height: 24),
-
+                    
                     // App Name
                     const Text(
                       'Easy Ride',
@@ -175,7 +175,7 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
                       ),
                     ),
                     const SizedBox(height: 8),
-
+                    
                     // Tagline
                     const Text(
                       'Your ride, your way',
@@ -185,7 +185,7 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
                       ),
                     ),
                     const SizedBox(height: 48),
-
+                    
                     // Loading indicator
                     const CircularProgressIndicator(
                       valueColor: AlwaysStoppedAnimation<Color>(Colors.white),

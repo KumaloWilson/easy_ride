@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
+import '../../../models/location_model.dart';
 import '../controllers/rider_controller.dart';
 import '../models/saved_location_model.dart';
 
@@ -10,19 +11,19 @@ class SavedLocationsList extends StatelessWidget {
   final RiderController controller = Get.find<RiderController>();
 
   SavedLocationsList({
-    super.key,
+    Key? key,
     required this.onLocationSelected,
-  });
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Obx(() {
       final savedLocations = controller.savedLocations;
-
+      
       if (savedLocations.isEmpty) {
         return _buildEmptyState(context);
       }
-
+      
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -31,8 +32,8 @@ class SavedLocationsList extends StatelessWidget {
             child: Text(
               'Saved Locations',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+                    fontWeight: FontWeight.bold,
+                  ),
             ),
           ),
           ListView.builder(
@@ -67,15 +68,15 @@ class SavedLocationsList extends StatelessWidget {
               Text(
                 'No saved locations',
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                      fontWeight: FontWeight.bold,
+                    ),
               ),
               const SizedBox(height: 4),
               Text(
                 'Save your frequent destinations',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.grey[600],
-                ),
+                      color: Colors.grey[600],
+                    ),
               ),
             ],
           ),
@@ -88,7 +89,7 @@ class SavedLocationsList extends StatelessWidget {
 
   Widget _buildLocationItem(BuildContext context, SavedLocationModel location) {
     IconData iconData;
-
+    
     switch (location.type) {
       case LocationType.home:
         iconData = Icons.home;
@@ -102,7 +103,7 @@ class SavedLocationsList extends StatelessWidget {
       default:
         iconData = Icons.location_on;
     }
-
+    
     return ListTile(
       leading: CircleAvatar(
         backgroundColor: Colors.grey[200],
@@ -181,7 +182,7 @@ class SavedLocationsList extends StatelessWidget {
     final TextEditingController nameController = TextEditingController();
     final TextEditingController addressController = TextEditingController();
     LocationType selectedType = LocationType.favorite;
-
+    
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -223,7 +224,7 @@ class SavedLocationsList extends StatelessWidget {
                               'Home',
                               Icons.home,
                               selectedType,
-                                  (type) => setState(() => selectedType = type),
+                              (type) => setState(() => selectedType = type),
                             ),
                             _buildTypeChip(
                               context,
@@ -231,7 +232,7 @@ class SavedLocationsList extends StatelessWidget {
                               'Work',
                               Icons.work,
                               selectedType,
-                                  (type) => setState(() => selectedType = type),
+                              (type) => setState(() => selectedType = type),
                             ),
                             _buildTypeChip(
                               context,
@@ -239,7 +240,7 @@ class SavedLocationsList extends StatelessWidget {
                               'Favorite',
                               Icons.favorite,
                               selectedType,
-                                  (type) => setState(() => selectedType = type),
+                              (type) => setState(() => selectedType = type),
                             ),
                           ],
                         ),
@@ -268,7 +269,7 @@ class SavedLocationsList extends StatelessWidget {
                   );
                   return;
                 }
-
+                
                 // In a real app, you would geocode the address to get coordinates
                 // For this example, we'll use a placeholder location
                 final location = SavedLocationModel(
@@ -279,8 +280,8 @@ class SavedLocationsList extends StatelessWidget {
                   longitude: -122.4194, // Placeholder
                   type: selectedType,
                 );
-
-                await controller.saveLocation(location as Map<String, dynamic>);
+                
+                await controller.saveLocation(location.toMap());
                 Navigator.of(context).pop();
               },
               child: const Text('Save'),
@@ -295,7 +296,7 @@ class SavedLocationsList extends StatelessWidget {
     final TextEditingController nameController = TextEditingController(text: location.name);
     final TextEditingController addressController = TextEditingController(text: location.address);
     LocationType selectedType = location.type;
-
+    
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -335,7 +336,7 @@ class SavedLocationsList extends StatelessWidget {
                               'Home',
                               Icons.home,
                               selectedType,
-                                  (type) => setState(() => selectedType = type),
+                              (type) => setState(() => selectedType = type),
                             ),
                             _buildTypeChip(
                               context,
@@ -343,7 +344,7 @@ class SavedLocationsList extends StatelessWidget {
                               'Work',
                               Icons.work,
                               selectedType,
-                                  (type) => setState(() => selectedType = type),
+                              (type) => setState(() => selectedType = type),
                             ),
                             _buildTypeChip(
                               context,
@@ -351,7 +352,7 @@ class SavedLocationsList extends StatelessWidget {
                               'Favorite',
                               Icons.favorite,
                               selectedType,
-                                  (type) => setState(() => selectedType = type),
+                              (type) => setState(() => selectedType = type),
                             ),
                           ],
                         ),
@@ -380,7 +381,7 @@ class SavedLocationsList extends StatelessWidget {
                   );
                   return;
                 }
-
+                
                 final updatedLocation = SavedLocationModel(
                   id: location.id,
                   name: nameController.text.trim(),
@@ -389,8 +390,8 @@ class SavedLocationsList extends StatelessWidget {
                   longitude: location.longitude,
                   type: selectedType,
                 );
-
-                await controller.updateLocation(updatedLocation as Map<String, dynamic>);
+                
+                await controller.updateLocation(updatedLocation);
                 Navigator.of(context).pop();
               },
               child: const Text('Update'),
@@ -434,15 +435,15 @@ class SavedLocationsList extends StatelessWidget {
   }
 
   Widget _buildTypeChip(
-      BuildContext context,
-      LocationType type,
-      String label,
-      IconData icon,
-      LocationType selectedType,
-      Function(LocationType) onSelected,
-      ) {
+    BuildContext context,
+    LocationType type,
+    String label,
+    IconData icon,
+    LocationType selectedType,
+    Function(LocationType) onSelected,
+  ) {
     final isSelected = type == selectedType;
-
+    
     return ChoiceChip(
       label: Row(
         mainAxisSize: MainAxisSize.min,

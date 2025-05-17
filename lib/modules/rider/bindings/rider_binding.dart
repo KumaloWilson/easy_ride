@@ -15,7 +15,7 @@ class RiderBinding extends Bindings {
     Get.lazyPut<StorageService>(() => StorageService(), fenix: true);
     Get.lazyPut<NotificationService>(() => NotificationService(), fenix: true);
     Get.lazyPut<SafetyService>(() => SafetyService(), fenix: true);
-
+    
     // Register the RiderController
     Get.lazyPut<RiderController>(() => RiderController());
   }

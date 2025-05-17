@@ -3,7 +3,10 @@ import 'package:get/get.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:lottie/lottie.dart';
 import 'package:url_launcher/url_launcher.dart';
+
 import '../../../core/theme/app_theme.dart';
+import '../../../models/ride_model.dart';
+import '../../../models/ride_status.dart';
 import '../controllers/rider_controller.dart';
 
 class RideDetailsView extends StatelessWidget {
@@ -31,7 +34,7 @@ class RideDetailsView extends StatelessWidget {
     return Obx(() {
       final markers = controller.markers;
       final polylines = controller.polylines;
-
+      
       return GoogleMap(
         initialCameraPosition: CameraPosition(
           target: controller.currentLocation.value,
@@ -82,8 +85,8 @@ class RideDetailsView extends StatelessWidget {
               return Text(
                 _getRideStatusText(rideStatus),
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                      fontWeight: FontWeight.bold,
+                    ),
                 textAlign: TextAlign.center,
               );
             }),
@@ -161,7 +164,7 @@ class RideDetailsView extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    _buildRideInfo(context, ride as Map<String, dynamic>),
+                    _buildRideInfo(context, ride),
                     const SizedBox(height: 16),
                     _buildDriverInfo(context),
                     const SizedBox(height: 24),
@@ -179,7 +182,7 @@ class RideDetailsView extends StatelessWidget {
     );
   }
 
-  Widget _buildRideInfo(BuildContext context, Map<String, dynamic> ride) {
+  Widget _buildRideInfo(BuildContext context, RideModel ride) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -192,22 +195,22 @@ class RideDetailsView extends StatelessWidget {
           Text(
             'Ride Information',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
+                  fontWeight: FontWeight.bold,
+                ),
           ),
           const SizedBox(height: 16),
           _buildLocationRow(
             context,
             Icons.my_location,
             'Pickup',
-            ride['pickup']['name'] ?? 'Unknown location',
+            ride.pickup?.name ?? 'Unknown location',
           ),
           const SizedBox(height: 8),
           _buildLocationRow(
             context,
             Icons.location_on,
             'Dropoff',
-            ride['dropoff']['name'] ?? 'Unknown location',
+            ride.dropoff?.name ?? 'Unknown location',
           ),
           const SizedBox(height: 16),
           Row(
@@ -216,12 +219,12 @@ class RideDetailsView extends StatelessWidget {
               _buildInfoItem(
                 context,
                 'Ride Type',
-                ride['rideType'] ?? 'Standard',
+                ride.rideType ?? 'Standard',
               ),
               _buildInfoItem(
                 context,
                 'Fare',
-                '\$${(ride['fare'] ?? 0.0).toStringAsFixed(2)}',
+                '\$${(ride.fare ?? 0.0).toStringAsFixed(2)}',
               ),
             ],
           ),
@@ -231,11 +234,11 @@ class RideDetailsView extends StatelessWidget {
   }
 
   Widget _buildLocationRow(
-      BuildContext context,
-      IconData icon,
-      String label,
-      String address,
-      ) {
+    BuildContext context,
+    IconData icon,
+    String label,
+    String address,
+  ) {
     return Row(
       children: [
         Icon(
@@ -251,8 +254,8 @@ class RideDetailsView extends StatelessWidget {
               Text(
                 label,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.grey[600],
-                ),
+                      color: Colors.grey[600],
+                    ),
               ),
               Text(
                 address,
@@ -274,14 +277,14 @@ class RideDetailsView extends StatelessWidget {
         Text(
           label,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Colors.grey[600],
-          ),
+                color: Colors.grey[600],
+              ),
         ),
         Text(
           value,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+                fontWeight: FontWeight.bold,
+              ),
         ),
       ],
     );
@@ -289,8 +292,8 @@ class RideDetailsView extends StatelessWidget {
 
   Widget _buildDriverInfo(BuildContext context) {
     final driverInfo = controller.driverInfo.value;
-
-    if (controller.rideStatus.value == 'pending' ||
+    
+    if (controller.rideStatus.value == 'pending' || 
         controller.rideStatus.value == 'requested') {
       return Center(
         child: Column(
@@ -323,8 +326,8 @@ class RideDetailsView extends StatelessWidget {
           Text(
             'Driver Information',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
+                  fontWeight: FontWeight.bold,
+                ),
           ),
           const SizedBox(height: 16),
           Row(
@@ -346,8 +349,8 @@ class RideDetailsView extends StatelessWidget {
                     Text(
                       driverInfo['user']['fullName'] ?? 'Driver',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                            fontWeight: FontWeight.bold,
+                          ),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -404,7 +407,7 @@ class RideDetailsView extends StatelessWidget {
       );
       return;
     }
-
+    
     final Uri url = Uri.parse('tel:$phoneNumber');
     if (await canLaunchUrl(url)) {
       await launchUrl(url);
@@ -420,13 +423,13 @@ class RideDetailsView extends StatelessWidget {
   void _messageDriver() {
     final ride = controller.currentRide.value;
     if (ride == null) return;
-
-    Get.toNamed('/chat/${ride}');
+    
+    Get.toNamed('/chat/${ride.id}');
   }
 
   Widget _buildActionButtons(BuildContext context) {
     final status = controller.rideStatus.value;
-
+    
     if (status == 'completed') {
       return Column(
         children: [
@@ -599,7 +602,7 @@ class RideDetailsView extends StatelessWidget {
             TextButton(
               onPressed: () {
                 Navigator.of(context).pop();
-                controller.rateDriver(rating, feedback);
+                controller.rateDriver(controller.currentRide.value!.id, rating, feedback,);
                 Get.back();
               },
               child: const Text('Submit'),
@@ -612,16 +615,16 @@ class RideDetailsView extends StatelessWidget {
 
   Widget _buildETACard(BuildContext context) {
     final status = controller.rideStatus.value;
-
+    
     if (status == 'completed' || status == 'cancelled') {
       return const SizedBox.shrink();
     }
-
+    
     String title;
     String subtitle;
     double distance;
     double duration;
-
+    
     if (status == 'accepted' || status == 'arrived') {
       title = 'Driver is on the way';
       subtitle = 'Arriving in ${_formatDuration(controller.durationToPickup.value)}';
@@ -635,7 +638,7 @@ class RideDetailsView extends StatelessWidget {
     } else {
       return const SizedBox.shrink();
     }
-
+    
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -790,7 +793,7 @@ class RideDetailsView extends StatelessWidget {
 
   void _showReportDriverDialog(BuildContext context) {
     String issue = '';
-
+    
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -826,7 +829,7 @@ class RideDetailsView extends StatelessWidget {
               onPressed: () {
                 if (issue.trim().isNotEmpty) {
                   Navigator.of(context).pop();
-                  controller.reportDriver(issue, 'User reported issue during ride');
+                  controller.reportDriver(controller.currentRide.value!.id, issue, 'User reported issue during ride');
                   Get.snackbar(
                     'Report Submitted',
                     'Thank you for your report. We will investigate this issue.',

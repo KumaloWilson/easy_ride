@@ -1,32 +1,48 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:lottie/lottie.dart';
+import 'package:easy_ride/core/theme/app_theme.dart';
+import 'package:easy_ride/modules/rider/controllers/rider_controller.dart';
+import 'package:easy_ride/modules/rider/widgets/location_search_bar.dart';
+import 'package:easy_ride/models/location_model.dart';
 
-import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/shimmer_loading.dart';
-import '../controllers/rider_controller.dart';
-import '../widgets/location_search_bar.dart';
-import '../widgets/ride_options_card.dart';
-import '../widgets/fare_breakdown_card.dart';
+class RideBookingView extends StatefulWidget {
+  const RideBookingView({Key? key}) : super(key: key);
 
-class RideBookingView extends StatelessWidget {
+  @override
+  State<RideBookingView> createState() => _RideBookingViewState();
+}
+
+class _RideBookingViewState extends State<RideBookingView> {
   final RiderController controller = Get.find<RiderController>();
+  bool _showSearchBar = false;
+  bool _isPickupMode = true;
+  bool _mapTapEnabled = false;
 
-  RideBookingView({Key? key}) : super(key: key);
+  @override
+  void initState() {
+    super.initState();
+    // If pickup location is not set, set it to current location
+    if (controller.pickupLocation.value == null) {
+      controller.getCurrentLocation();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: Stack(
-          children: [
-            _buildMap(),
-            _buildTopBar(context),
-            _buildBottomSheet(context),
-            _buildLoadingOverlay(),
-          ],
-        ),
+      body: Stack(
+        children: [
+          _buildMap(),
+          _buildBackButton(),
+          _buildLocationBar(),
+          if (_showSearchBar)
+            _buildExpandedSearchBar(),
+          if (!_showSearchBar)
+            _buildBottomCard(),
+          if (_mapTapEnabled)
+            _buildMapTapInstructions(),
+        ],
       ),
     );
   }
@@ -51,300 +67,287 @@ class RideBookingView extends StatelessWidget {
         onMapCreated: (GoogleMapController mapController) {
           controller.mapController.value = mapController;
         },
+        onTap: _mapTapEnabled ? _handleMapTap : null,
       );
     });
   }
 
-  Widget _buildTopBar(BuildContext context) {
+  void _handleMapTap(LatLng position) async {
+    // Show loading indicator
+    Get.dialog(
+      const Center(
+        child: CircularProgressIndicator(),
+      ),
+      barrierDismissible: false,
+    );
+
+    try {
+      // Reverse geocode the tapped location
+      final location = await controller.reverseGeocode(position);
+
+      // Close loading dialog
+      Get.back();
+
+      // Set the location based on mode
+      if (_isPickupMode) {
+        controller.setPickupLocation(location);
+      } else {
+        controller.setDropoffLocation(location);
+      }
+
+      // Disable map tap mode
+      setState(() {
+        _mapTapEnabled = false;
+      });
+    } catch (e) {
+      // Close loading dialog
+      Get.back();
+
+      // Show error
+      Get.snackbar(
+        'Error',
+        'Failed to get location details. Please try again.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    }
+  }
+
+  Widget _buildBackButton() {
     return Positioned(
-      top: 16,
+      top: 40,
       left: 16,
-      right: 16,
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(30),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 10,
-                      offset: const Offset(0, 5),
-                    ),
-                  ],
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: () => Get.back(),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Text(
-                  'Book a Ride',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-              const SizedBox(width: 48), // Balance for back button
-            ],
-          ),
-          const SizedBox(height: 16),
-          Obx(() => TextField(
-            decoration: InputDecoration(
-              hintText: controller.pickupLocation.value?['name'] ?? 'Set pickup location',
-              prefixIcon: const Icon(Icons.my_location, color: Colors.green),
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(30),
-                borderSide: BorderSide.none,
-              ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            ),
-            readOnly: true,
-            onTap: () {
-              // Show location search for pickup
-              _showLocationSearch(context, true);
-            },
-          )),
-          const SizedBox(height: 8),
-          Obx(() => TextField(
-            decoration: InputDecoration(
-              hintText: controller.dropoffLocation.value?['name'] ?? 'Where to?',
-              prefixIcon: const Icon(Icons.location_on, color: Colors.red),
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(30),
-                borderSide: BorderSide.none,
-              ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            ),
-            readOnly: true,
-            onTap: () {
-              // Show location search for dropoff
-              _showLocationSearch(context, false);
-            },
-          )),
-        ],
+      child: CircleAvatar(
+        backgroundColor: Colors.white,
+        child: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          onPressed: () => Get.back(),
+        ),
       ),
     );
   }
 
-  void _showLocationSearch(BuildContext context, bool isPickup) {
-    // In a real app, you would show a search UI here
-    // For this example, we'll simulate selecting a location
-    final location = {
-      'name': isPickup ? 'Current Location' : 'Central Park',
-      'address': isPickup ? 'Your current location' : 'Central Park, New York',
-      'latitude': isPickup ? controller.currentLocation.value.latitude : 40.7812,
-      'longitude': isPickup ? controller.currentLocation.value.longitude : -73.9665,
-    };
+  Widget _buildLocationBar() {
+    return Positioned(
+      top: 40,
+      left: 70,
+      right: 16,
+      child: Obx(() {
+        final pickupName = controller.pickupLocation.value?.name ?? 'Set pickup location';
+        final dropoffName = controller.dropoffLocation.value?.name ?? 'Where to?';
 
-    if (isPickup) {
-      controller.setPickupLocation(location);
-    } else {
-      controller.setDropoffLocation(location);
-    }
-  }
-
-  Widget _buildBottomSheet(BuildContext context) {
-    return DraggableScrollableSheet(
-      initialChildSize: 0.4,
-      minChildSize: 0.2,
-      maxChildSize: 0.9,
-      builder: (context, scrollController) {
-        return Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(20),
-              topRight: Radius.circular(20),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black12,
-                blurRadius: 10,
-                spreadRadius: 0,
-              ),
-            ],
-          ),
-          child: SingleChildScrollView(
-            controller: scrollController,
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 50,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Select Ride Type',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Obx(() => Column(
-                    children: [
-                      _buildRideTypeOption('Standard', 'Affordable rides for everyday', 1.0,
-                          controller.selectedRideType.value == 'Standard'),
-                      _buildRideTypeOption('Premium', 'High-end cars with top-rated drivers', 1.5,
-                          controller.selectedRideType.value == 'Premium'),
-                      _buildRideTypeOption('XL', 'Spacious vehicles for groups up to 6', 2.0,
-                          controller.selectedRideType.value == 'XL'),
-                    ],
-                  )),
-                  const SizedBox(height: 24),
-                  Obx(() {
-                    if (controller.isCalculatingFare.value) {
-                      return ShimmerLoading(
-                        child: Container(
-                          height: 100,
-                          width: double.infinity,
-                        ),
-                        isLoading: true,
-                      );
-                    } else if (controller.fareEstimate.value != null) {
-                      return _buildFareCard(context);
-                    } else {
-                      return const SizedBox.shrink();
-                    }
-                  }),
-                  const SizedBox(height: 24),
-                  Obx(() {
-                    final bool canRequestRide = controller.pickupLocation.value != null &&
-                        controller.dropoffLocation.value != null;
-                    return ElevatedButton(
-                      onPressed: canRequestRide
-                          ? () => controller.requestRide()
-                          : null,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.primaryColor,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30),
-                        ),
-                        minimumSize: const Size(double.infinity, 50),
-                      ),
-                      child: controller.isRequestingRide.value
-                          ? const SizedBox(
-                        height: 24,
-                        width: 24,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        ),
-                      )
-                          : const Text(
-                        'Request Ride',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    );
-                  }),
-                  const SizedBox(height: 16),
-                  Obx(() {
-                    if (controller.fareEstimate.value != null) {
-                      return Center(
-                        child: Text(
-                          'Estimated arrival: ${_formatDuration(controller.durationToDestination.value)}',
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      );
-                    } else {
-                      return const SizedBox.shrink();
-                    }
-                  }),
-                  const SizedBox(height: 24),
-                ],
-              ),
-            ),
-          ),
+        return LocationSearchBar(
+          pickupLocation: pickupName,
+          dropoffLocation: dropoffName,
+          onTap: () {
+            setState(() {
+              _showSearchBar = true;
+              _isPickupMode = controller.pickupLocation.value == null;
+            });
+          },
         );
-      },
+      }),
     );
   }
 
-  Widget _buildRideTypeOption(String title, String description, double multiplier, bool isSelected) {
-    return GestureDetector(
-      onTap: () {
-        controller.selectedRideType.value = title;
-        controller.calculateFare();
-      },
+  Widget _buildExpandedSearchBar() {
+    return Positioned(
+      top: 40,
+      left: 16,
+      right: 16,
+      child: Obx(() {
+        final pickupName = controller.pickupLocation.value?.name ?? 'Set pickup location';
+        final dropoffName = controller.dropoffLocation.value?.name ?? 'Where to?';
+
+        return LocationSearchBar(
+          pickupLocation: pickupName,
+          dropoffLocation: dropoffName,
+          isExpanded: true,
+          isPickupMode: _isPickupMode,
+          onClose: () {
+            setState(() {
+              _showSearchBar = false;
+            });
+          },
+          onPickupSelected: (location) {
+            controller.setPickupLocation(
+              LocationModel(
+                name: location['name'],
+                latitude: location['latitude'],
+                longitude: location['longitude'],
+                address: location['address'],
+              )
+            );
+            setState(() {
+              _showSearchBar = false;
+            });
+          },
+          onDropoffSelected: (location) {
+            controller.setDropoffLocation(
+                LocationModel(
+                  name: location['name'],
+                  latitude: location['latitude'],
+                  longitude: location['longitude'],
+                  address: location['address'],
+                )
+            );
+            setState(() {
+              _showSearchBar = false;
+            });
+          },
+        );
+      }),
+    );
+  }
+
+  Widget _buildBottomCard() {
+    return Positioned(
+      bottom: 0,
+      left: 0,
+      right: 0,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isSelected ? AppTheme.primaryColor.withOpacity(0.1) : Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isSelected ? AppTheme.primaryColor : Colors.grey[300]!,
-            width: 2,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
           ),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              title == 'Standard' ? Icons.directions_car
-                  : title == 'Premium' ? Icons.airport_shuttle
-                  : Icons.directions_bus,
-              color: isSelected ? AppTheme.primaryColor : Colors.grey[600],
-              size: 32,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black12,
+              blurRadius: 10,
+              spreadRadius: 0,
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildLocationSelectionCard(),
+            const SizedBox(height: 16),
+            _buildRideOptionsCard(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLocationSelectionCard() {
+    return Card(
+      elevation: 0,
+      color: Colors.grey[100],
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            Obx(() {
+              final hasPickup = controller.pickupLocation.value != null;
+              final hasDropoff = controller.dropoffLocation.value != null;
+
+              return Column(
                 children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: isSelected ? AppTheme.primaryColor : Colors.black,
-                    ),
+                  // Pickup location
+                  Row(
+                    children: [
+                      Container(
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: Colors.green,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.white,
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _showSearchBar = true;
+                              _isPickupMode = true;
+                            });
+                          },
+                          child: Text(
+                            hasPickup
+                                ? controller.pickupLocation.value!.name
+                                : 'Set pickup location',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w500,
+                              color: hasPickup ? Colors.black : Colors.grey[600],
+                            ),
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.map, size: 20),
+                        onPressed: () {
+                          setState(() {
+                            _mapTapEnabled = true;
+                            _isPickupMode = true;
+                          });
+                        },
+                        tooltip: 'Select on map',
+                      ),
+                    ],
                   ),
-                  Text(
-                    description,
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      fontSize: 12,
-                    ),
+                  const SizedBox(height: 8),
+                  const Divider(),
+                  const SizedBox(height: 8),
+                  // Dropoff location
+                  Row(
+                    children: [
+                      Container(
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.white,
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _showSearchBar = true;
+                              _isPickupMode = false;
+                            });
+                          },
+                          child: Text(
+                            hasDropoff
+                                ? controller.dropoffLocation.value!.name
+                                : 'Where to?',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w500,
+                              color: hasDropoff ? Colors.black : Colors.grey[600],
+                            ),
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.map, size: 20),
+                        onPressed: () {
+                          setState(() {
+                            _mapTapEnabled = true;
+                            _isPickupMode = false;
+                          });
+                        },
+                        tooltip: 'Select on map',
+                      ),
+                    ],
                   ),
                 ],
-              ),
-            ),
-            Obx(() {
-              if (controller.fareEstimate.value != null) {
-                final baseFare = controller.fareEstimate.value!.baseFare;
-                final fare = baseFare * multiplier;
-                return Text(
-                  '\$${fare.toStringAsFixed(2)}',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: isSelected ? AppTheme.primaryColor : Colors.black,
-                  ),
-                );
-              } else {
-                return const SizedBox.shrink();
-              }
+              );
             }),
           ],
         ),
@@ -352,133 +355,226 @@ class RideBookingView extends StatelessWidget {
     );
   }
 
-  Widget _buildFareCard(BuildContext context) {
-    final fare = controller.fareEstimate.value!;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey[100],
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Fare Estimate',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Text(
-                '\$${fare.totalFare.toStringAsFixed(2)}',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          const Divider(),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Distance',
-                style: TextStyle(
-                  color: Colors.grey[600],
-                ),
-              ),
-              Text('${fare.distance.toStringAsFixed(1)} km'),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Duration',
-                style: TextStyle(
-                  color: Colors.grey[600],
-                ),
-              ),
-              Text('${_formatDuration(fare.duration)}'),
-            ],
-          ),
-          const SizedBox(height: 8),
-          GestureDetector(
-            onTap: () {
-              controller.showFareBreakdown.value = true;
-            },
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  'View fare breakdown',
-                  style: TextStyle(
-                    color: AppTheme.primaryColor,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Icon(
-                  Icons.arrow_forward_ios,
-                  size: 12,
-                  color: AppTheme.primaryColor,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _formatDuration(double minutes) {
-    if (minutes < 1) {
-      return 'Less than a minute';
-    } else if (minutes < 60) {
-      return '${minutes.round()} min';
-    } else {
-      final hours = (minutes / 60).floor();
-      final mins = (minutes % 60).round();
-      return '${hours}h ${mins}m';
-    }
-  }
-
-  Widget _buildLoadingOverlay() {
+  Widget _buildRideOptionsCard() {
     return Obx(() {
-      if (controller.isRequestingRide.value) {
-        return Container(
-          color: Colors.black.withOpacity(0.5),
-          child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Lottie.asset(
-                  'assets/animations/car_loading.json',
-                  width: 200,
-                  height: 200,
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Finding your driver...',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
+      final hasPickup = controller.pickupLocation.value != null;
+      final hasDropoff = controller.dropoffLocation.value != null;
+      final isCalculatingFare = controller.isCalculatingFare.value;
+      final fareEstimate = controller.fareEstimate.value;
+
+      if (!hasPickup || !hasDropoff) {
+        return ElevatedButton(
+          onPressed: null,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppTheme.primaryColor,
+            disabledBackgroundColor: Colors.grey,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(30),
+            ),
+            minimumSize: const Size(double.infinity, 50),
+          ),
+          child: const Text(
+            'Set pickup and dropoff locations',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
             ),
           ),
         );
-      } else {
-        return const SizedBox.shrink();
       }
+
+      if (isCalculatingFare) {
+        return const Center(
+          child: Padding(
+            padding: EdgeInsets.all(16.0),
+            child: CircularProgressIndicator(),
+          ),
+        );
+      }
+
+      return Column(
+        children: [
+          // Ride types
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildRideTypeOption('standard', 'Standard', Icons.directions_car, 'Up to 4 passengers'),
+                _buildRideTypeOption('comfort', 'Comfort', Icons.airline_seat_recline_normal, 'Extra legroom'),
+                _buildRideTypeOption('premium', 'Premium', Icons.star, 'Luxury vehicles'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Fare estimate
+          if (fareEstimate != null)
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Estimated Fare',
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '\$${fareEstimate.totalFare.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        'Estimated Time',
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${controller.durationToDestination.value.toInt()} min',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(height: 16),
+          // Request ride button
+          ElevatedButton(
+            onPressed: hasPickup && hasDropoff ? () => controller.requestRide() : null,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primaryColor,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(30),
+              ),
+              minimumSize: const Size(double.infinity, 50),
+            ),
+            child: const Text(
+              'Request Ride',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      );
     });
+  }
+
+  Widget _buildRideTypeOption(String type, String name, IconData icon, String description) {
+    return Obx(() {
+      final isSelected = controller.selectedRideType.value == type;
+
+      return GestureDetector(
+        onTap: () {
+          controller.selectedRideType.value = type;
+          controller.calculateFare();
+        },
+        child: Container(
+          margin: const EdgeInsets.only(right: 12),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isSelected ? AppTheme.primaryColor.withOpacity(0.1) : Colors.grey[100],
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected ? AppTheme.primaryColor : Colors.transparent,
+              width: 2,
+            ),
+          ),
+          child: Column(
+            children: [
+              Icon(
+                icon,
+                color: isSelected ? AppTheme.primaryColor : Colors.black87,
+                size: 28,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                name,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: isSelected ? AppTheme.primaryColor : Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                description,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    });
+  }
+
+  Widget _buildMapTapInstructions() {
+    return Positioned(
+      top: 100,
+      left: 0,
+      right: 0,
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.7),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                _isPickupMode ? Icons.location_on : Icons.place,
+                color: _isPickupMode ? Colors.green : Colors.red,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                _isPickupMode
+                    ? 'Tap on the map to set pickup location'
+                    : 'Tap on the map to set destination',
+                style: const TextStyle(color: Colors.white),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                onPressed: () {
+                  setState(() {
+                    _mapTapEnabled = false;
+                  });
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

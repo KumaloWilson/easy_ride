@@ -4,6 +4,8 @@ import 'package:easy_ride/core/services/location_service.dart';
 import 'package:easy_ride/core/services/auth_service.dart';
 import 'package:easy_ride/core/services/storage_service.dart';
 import 'package:easy_ride/core/services/safety_service.dart';
+import 'package:easy_ride/core/services/notification_service.dart';
+import 'package:easy_ride/core/services/api_service.dart';
 import 'package:easy_ride/models/ride_model.dart';
 import 'package:easy_ride/models/driver_model.dart';
 import 'package:easy_ride/models/user_model.dart';
@@ -17,6 +19,10 @@ import 'dart:ui' as ui;
 import 'package:uuid/uuid.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'dart:math' show pi, sqrt, atan2, sin, cos;
+import 'dart:io';
+import 'package:easy_ride/core/values/constants.dart';
+import 'package:easy_ride/models/location_model.dart';
+import 'package:easy_ride/core/utils/logs.dart';
 
 class RiderController extends GetxController {
   final LocationService _locationService = Get.find<LocationService>();
@@ -24,12 +30,19 @@ class RiderController extends GetxController {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final StorageService _storageService = Get.find<StorageService>();
   final SafetyService _safetyService = Get.find<SafetyService>();
+  final NotificationService _notificationService = Get.find<NotificationService>();
+  final ApiService _apiService = Get.find<ApiService>();
 
   // Map controller
   Rx<GoogleMapController?> mapController = Rx<GoogleMapController?>(null);
 
   // User location
   final Rx<LatLng> currentLocation = Rx<LatLng>(const LatLng(0, 0));
+
+
+  // Add a userProfile observable for the sidebar
+  final Rx<UserModel?> userProfile = Rx<UserModel?>(null);
+
 
   // Map state
   final RxDouble mapZoom = 15.0.obs;
@@ -50,12 +63,12 @@ class RiderController extends GetxController {
   final Rx<RideModel?> currentRide = Rx<RideModel?>(null);
 
   // Pickup and dropoff locations
-  final Rx<Map<String, dynamic>?> pickupLocation = Rx<Map<String, dynamic>?>(null);
-  final Rx<Map<String, dynamic>?> dropoffLocation = Rx<Map<String, dynamic>?>(null);
+  final Rx<LocationModel?> pickupLocation = Rx<LocationModel?>(null);
+  final Rx<LocationModel?> dropoffLocation = Rx<LocationModel?>(null);
 
   // Ride options
-  final RxString selectedRideType = 'Standard'.obs;
-  final RxString selectedPaymentMethod = 'card'.obs;
+  final RxString selectedRideType = Constants.standardRide.obs;
+  final RxString selectedPaymentMethod = Constants.cardPayment.obs;
 
   // Fare estimate
   final Rx<FareModel?> fareEstimate = Rx<FareModel?>(null);
@@ -95,6 +108,16 @@ class RiderController extends GetxController {
   final RxBool showDriverInfo = false.obs;
   final RxBool showRideDetails = false.obs;
 
+  // Search state
+  final RxString searchQuery = ''.obs;
+  final RxList<LocationModel> searchResults = <LocationModel>[].obs;
+  final RxBool isSearching = false.obs;
+  final RxBool showRecentSearches = false.obs;
+  final RxList<String> recentSearches = <String>[].obs;
+
+  // Navigation
+  final RxInt selectedNavIndex = 0.obs;
+
   // Streams
   StreamSubscription? _locationSubscription;
   StreamSubscription? _rideSubscription;
@@ -107,13 +130,21 @@ class RiderController extends GetxController {
   final RxList<RideModel> rideHistory = <RideModel>[].obs;
   final RxBool isLoadingRideHistory = false.obs;
 
+  // Polyline string for ride request
+  String? polylineString;
+
+  // Theme
+  final Rx<ThemeMode> themeMode = ThemeMode.system.obs;
+
   @override
   void onInit() {
     super.onInit();
+    DevLogs.info('RiderController initialized');
     _initLocationTracking();
     _loadSavedLocations();
     _checkForActiveRide();
     _loadSurgePricing();
+    _loadRecentSearches();
   }
 
   @override
@@ -122,10 +153,12 @@ class RiderController extends GetxController {
     _rideSubscription?.cancel();
     _driverLocationSubscription?.cancel();
     mapController.value?.dispose();
+    DevLogs.info('RiderController disposed');
     super.onClose();
   }
 
   void _initLocationTracking() {
+    DevLogs.debug('Initializing location tracking');
     _locationSubscription = _locationService.locationStream.listen((position) {
       if (position.latitude != null && position.longitude != null) {
         currentLocation.value = LatLng(position.latitude!, position.longitude!);
@@ -170,14 +203,16 @@ class RiderController extends GetxController {
 
     // Apply custom map style
     _setMapStyle();
+    DevLogs.debug('Map created and initialized');
   }
 
   Future<void> _setMapStyle() async {
     try {
       String style = await rootBundle.loadString('assets/map_style.json');
       mapController.value?.setMapStyle(style);
+      DevLogs.debug('Map style applied');
     } catch (e) {
-      print('Error setting map style: $e');
+      DevLogs.error('Error setting map style', exception: e);
     }
   }
 
@@ -188,6 +223,9 @@ class RiderController extends GetxController {
       mapController.value!.animateCamera(
         CameraUpdate.newLatLngZoom(currentLocation.value, mapZoom.value),
       );
+      DevLogs.debug('Following user location enabled');
+    } else {
+      DevLogs.debug('Following user location disabled');
     }
   }
 
@@ -212,7 +250,7 @@ class RiderController extends GetxController {
       updatedMarkers.add(marker);
       markers.value = updatedMarkers;
     } catch (e) {
-      print('Error updating user marker: $e');
+      DevLogs.error('Error updating user marker', exception: e);
       // Fallback to default marker if custom one fails
       final marker = Marker(
         markerId: const MarkerId('user_location'),
@@ -244,7 +282,7 @@ class RiderController extends GetxController {
         throw Exception('Failed to get byte data from image');
       }
     } catch (e) {
-      print('Error creating custom marker: $e');
+      DevLogs.error('Error creating custom marker', exception: e);
       return BitmapDescriptor.defaultMarker;
     }
   }
@@ -253,27 +291,30 @@ class RiderController extends GetxController {
     if (_authService.firebaseUser.value == null) return;
 
     isLoadingSavedLocations.value = true;
+    DevLogs.debug('Loading saved locations');
 
     try {
       final userId = _authService.firebaseUser.value!.uid;
       final snapshot = await _firestore
-          .collection('users')
+          .collection(Constants.usersCollection)
           .doc(userId)
-          .collection('saved_locations')
+          .collection(Constants.savedLocationsCollection)
           .orderBy('createdAt', descending: true)
           .get();
 
       final locations = snapshot.docs.map((doc) {
-        return SavedLocationModel.fromMap(doc.data());
+        return SavedLocationModel.fromMap(doc.data(), doc.id);
       }).toList();
 
       savedLocations.value = locations;
 
       // Set home and work locations
-      homeLocation.value = locations.firstWhereOrNull((loc) => loc.type == 'home');
-      workLocation.value = locations.firstWhereOrNull((loc) => loc.type == 'work');
+      homeLocation.value = locations.firstWhereOrNull((loc) => loc.type == LocationType.home);
+      workLocation.value = locations.firstWhereOrNull((loc) => loc.type == LocationType.work);
+
+      DevLogs.debug('Loaded ${locations.length} saved locations');
     } catch (e) {
-      print('Error loading saved locations: $e');
+      DevLogs.error('Error loading saved locations', exception: e);
     } finally {
       isLoadingSavedLocations.value = false;
     }
@@ -282,12 +323,13 @@ class RiderController extends GetxController {
   Future<void> _checkForActiveRide() async {
     if (_authService.firebaseUser.value == null) return;
 
+    DevLogs.debug('Checking for active ride');
     try {
       final userId = _authService.firebaseUser.value!.uid;
       final snapshot = await _firestore
-          .collection('rides')
+          .collection(Constants.ridesCollection)
           .where('riderId', isEqualTo: userId)
-          .where('status', whereIn: ['requested', 'accepted', 'arrived', 'started'])
+          .where('status', whereIn: [Constants.pending, Constants.accepted, Constants.arrived, Constants.started])
           .orderBy('createdAt', descending: true)
           .limit(1)
           .get();
@@ -317,12 +359,16 @@ class RiderController extends GetxController {
         _listenForRideUpdates(ride.id);
 
         // If ride is accepted, get driver info
-        if (ride.status == 'accepted' || ride.status == 'arrived' || ride.status == 'started') {
+        if (ride.status == Constants.accepted || ride.status == Constants.arrived || ride.status == Constants.started) {
           _getDriverInfo(ride.driverId!);
         }
+
+        DevLogs.info('Active ride found: ${ride.id}');
+      } else {
+        DevLogs.debug('No active ride found');
       }
     } catch (e) {
-      print('Error checking for active ride: $e');
+      DevLogs.error('Error checking for active ride', exception: e);
     }
   }
 
@@ -330,31 +376,31 @@ class RiderController extends GetxController {
     rideStatus.value = status;
 
     switch (status) {
-      case 'requested':
+      case Constants.pending:
         isRequestingRide.value = true;
         isRideAccepted.value = false;
         isRideInProgress.value = false;
         isRideCompleted.value = false;
         break;
-      case 'accepted':
+      case Constants.accepted:
         isRequestingRide.value = false;
         isRideAccepted.value = true;
         isRideInProgress.value = false;
         isRideCompleted.value = false;
         break;
-      case 'arrived':
+      case Constants.arrived:
         isRequestingRide.value = false;
         isRideAccepted.value = true;
         isRideInProgress.value = false;
         isRideCompleted.value = false;
         break;
-      case 'started':
+      case Constants.started:
         isRequestingRide.value = false;
         isRideAccepted.value = true;
         isRideInProgress.value = true;
         isRideCompleted.value = false;
         break;
-      case 'completed':
+      case Constants.completed:
         isRequestingRide.value = false;
         isRideAccepted.value = false;
         isRideInProgress.value = false;
@@ -372,8 +418,9 @@ class RiderController extends GetxController {
   void _listenForRideUpdates(String rideId) {
     _rideSubscription?.cancel();
 
+    DevLogs.debug('Starting to listen for ride updates: $rideId');
     _rideSubscription = _firestore
-        .collection('rides')
+        .collection(Constants.ridesCollection)
         .doc(rideId)
         .snapshots()
         .listen((snapshot) {
@@ -387,23 +434,31 @@ class RiderController extends GetxController {
         _setRideStateFromStatus(ride.status);
 
         // If ride is accepted, get driver info
-        if (ride.status == 'accepted' && driverInfo.value == null && ride.driverId != null) {
+        if (ride.status == Constants.accepted && driverInfo.value == null && ride.driverId != null) {
           _getDriverInfo(ride.driverId!);
         }
 
-        // If ride is completed, stop listening
-        if (ride.status == 'completed' || ride.status == 'cancelled') {
+        // If ride is completed or cancelled, stop listening
+        if (ride.status == Constants.completed || ride.status == Constants.cancelled) {
           _rideSubscription?.cancel();
           _driverLocationSubscription?.cancel();
+
+          // Show rating dialog if completed
+          if (ride.status == Constants.completed) {
+            Get.toNamed('/rider/rate-driver', arguments: ride.id);
+          }
         }
+
+        DevLogs.debug('Ride update received: ${ride.status}');
       }
     });
   }
 
   Future<void> _getDriverInfo(String driverId) async {
+    DevLogs.debug('Getting driver info: $driverId');
     try {
-      final userDoc = await _firestore.collection('users').doc(driverId).get();
-      final driverDoc = await _firestore.collection('drivers').doc(driverId).get();
+      final userDoc = await _firestore.collection(Constants.usersCollection).doc(driverId).get();
+      final driverDoc = await _firestore.collection(Constants.driversCollection).doc(driverId).get();
 
       if (userDoc.exists && driverDoc.exists) {
         final userData = userDoc.data()!;
@@ -419,25 +474,28 @@ class RiderController extends GetxController {
 
         // Start listening for driver location updates
         _listenForDriverLocationUpdates(driverId);
+
+        DevLogs.debug('Driver info retrieved successfully');
       }
     } catch (e) {
-      print('Error getting driver info: $e');
+      DevLogs.error('Error getting driver info', exception: e);
     }
   }
 
   void _listenForDriverLocationUpdates(String driverId) {
     _driverLocationSubscription?.cancel();
 
+    DevLogs.debug('Starting to listen for driver location updates: $driverId');
     _driverLocationSubscription = _firestore
-        .collection('drivers')
+        .collection(Constants.driverLocationsCollection)
         .doc(driverId)
         .snapshots()
         .listen((snapshot) {
       if (snapshot.exists) {
         final data = snapshot.data()!;
 
-        if (data['currentLocation'] != null) {
-          final GeoPoint location = data['currentLocation']['geopoint'];
+        if (data['location'] != null) {
+          final GeoPoint location = data['location'];
           final driverLatLng = LatLng(location.latitude, location.longitude);
 
           // Update driver marker
@@ -447,6 +505,8 @@ class RiderController extends GetxController {
           if (isRideAccepted.value && !isRideInProgress.value) {
             _updateETAToPickup();
           }
+
+          DevLogs.debug('Driver location updated');
         }
       }
     });
@@ -471,7 +531,7 @@ class RiderController extends GetxController {
       updatedMarkers.add(marker);
       markers.value = updatedMarkers;
     } catch (e) {
-      print('Error updating driver marker: $e');
+      DevLogs.error('Error updating driver marker', exception: e);
       // Fallback to default marker
       final marker = Marker(
         markerId: const MarkerId('driver_location'),
@@ -487,16 +547,14 @@ class RiderController extends GetxController {
     }
   }
 
-  Future<void> setPickupLocation(Map<String, dynamic> location) async {
+  Future<void> setPickupLocation(LocationModel location) async {
+    DevLogs.debug('Setting pickup location: ${location.name}');
     pickupLocation.value = location;
 
     // Update marker
     await _updateLocationMarker(
       'pickup_location',
-      LatLng(
-        location['latitude'],
-        location['longitude'],
-      ),
+      location.latLng,
       'assets/images/pickup_marker.png',
     );
 
@@ -512,16 +570,14 @@ class RiderController extends GetxController {
     }
   }
 
-  Future<void> setDropoffLocation(Map<String, dynamic> location) async {
+  Future<void> setDropoffLocation(LocationModel location) async {
+    DevLogs.debug('Setting dropoff location: ${location.name}');
     dropoffLocation.value = location;
 
     // Update marker
     await _updateLocationMarker(
       'dropoff_location',
-      LatLng(
-        location['latitude'],
-        location['longitude'],
-      ),
+      location.latLng,
       'assets/images/dropoff_marker.png',
     );
 
@@ -560,7 +616,7 @@ class RiderController extends GetxController {
       // Center map to show all markers
       _fitMapToMarkers();
     } catch (e) {
-      print('Error updating location marker: $e');
+      DevLogs.error('Error updating location marker', exception: e);
       // Fallback to default marker
       final marker = Marker(
         markerId: MarkerId(id),
@@ -626,24 +682,18 @@ class RiderController extends GetxController {
   Future<void> _calculateRoute() async {
     if (pickupLocation.value == null || dropoffLocation.value == null) return;
 
+    DevLogs.debug('Calculating route between pickup and dropoff');
     try {
-      final pickupLatLng = LatLng(
-        pickupLocation.value!['latitude'],
-        pickupLocation.value!['longitude'],
-      );
+      final pickupLatLng = pickupLocation.value!.latLng;
+      final dropoffLatLng = dropoffLocation.value!.latLng;
 
-      final dropoffLatLng = LatLng(
-        dropoffLocation.value!['latitude'],
-        dropoffLocation.value!['longitude'],
-      );
+      // Get directions from the LocationService
+      final directions = await _locationService.getDirections(pickupLatLng, dropoffLatLng);
 
-      PolylinePoints polylinePoints = PolylinePoints();
+      // Update route points
+      routePoints.value = directions['polylinePoints'];
 
-      // For demo purposes, we'll create a direct line between points
-      // In a real app, you would use the Google Directions API
-      final List<LatLng> points = [pickupLatLng, dropoffLatLng];
-      routePoints.value = points;
-
+      // Create polyline
       final polyline = Polyline(
         polylineId: const PolylineId('route'),
         color: Colors.blue,
@@ -653,21 +703,21 @@ class RiderController extends GetxController {
 
       polylines.value = {polyline};
 
-      // Calculate distance
-      double distance = _calculateDistance(
-        pickupLatLng.latitude,
-        pickupLatLng.longitude,
-        dropoffLatLng.latitude,
-        dropoffLatLng.longitude,
-      );
+      // Update distance and duration
+      distanceToDestination.value = directions['distance']['value'] / 1000; // Convert to km
+      durationToDestination.value = directions['duration']['value'] / 60; // Convert to minutes
 
-      // Estimate duration (assuming average speed of 30 km/h)
-      double duration = (distance / 30) * 60; // in minutes
+      // Save polyline for ride request
+      polylineString = directions['polyline'];
 
-      distanceToDestination.value = distance;
-      durationToDestination.value = duration;
+      DevLogs.debug('Route calculated: ${distanceToDestination.value.toStringAsFixed(2)} km, ${durationToDestination.value.toStringAsFixed(0)} min');
     } catch (e) {
-      print('Error calculating route: $e');
+      DevLogs.error('Error calculating route', exception: e);
+      Get.snackbar(
+        'Error',
+        'Failed to calculate route. Please try again.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
     }
   }
 
@@ -697,6 +747,7 @@ class RiderController extends GetxController {
     if (pickupLocation.value == null || dropoffLocation.value == null) return;
 
     isCalculatingFare.value = true;
+    DevLogs.debug('Calculating fare for ride');
 
     try {
       // Calculate fare based on distance and duration
@@ -708,28 +759,138 @@ class RiderController extends GetxController {
       );
 
       fareEstimate.value = fare;
+      DevLogs.debug('Fare calculated: \$${fare.totalFare.toStringAsFixed(2)}');
     } catch (e) {
-      print('Error calculating fare: $e');
+      DevLogs.error('Error calculating fare', exception: e);
     } finally {
       isCalculatingFare.value = false;
     }
   }
 
   Future<void> _loadSurgePricing() async {
+    DevLogs.debug('Loading surge pricing');
     try {
       // In a real app, this would be fetched from the server based on demand
-      // For now, we'll simulate surge pricing based on time of day
-      final hour = DateTime.now().hour;
+      // For now, we'll get it from Firestore
+      final doc = await _firestore.collection('settings').doc('pricing').get();
 
-      // Simulate surge pricing during peak hours (7-9 AM and 5-7 PM)
-      if ((hour >= 7 && hour <= 9) || (hour >= 17 && hour <= 19)) {
-        surgeFactor.value = 1.5; // 50% surge
+      if (doc.exists) {
+        final data = doc.data()!;
+        surgeFactor.value = data['surgeFactor'] ?? 1.0;
       } else {
-        surgeFactor.value = 1.0; // No surge
+        // Fallback to time-based surge if no server data
+        final hour = DateTime.now().hour;
+
+        // Simulate surge pricing during peak hours (7-9 AM and 5-7 PM)
+        if ((hour >= 7 && hour <= 9) || (hour >= 17 && hour <= 19)) {
+          surgeFactor.value = 1.5; // 50% surge
+        } else {
+          surgeFactor.value = 1.0; // No surge
+        }
+      }
+
+      DevLogs.debug('Surge factor: ${surgeFactor.value}');
+    } catch (e) {
+      DevLogs.error('Error loading surge pricing', exception: e);
+      surgeFactor.value = 1.0; // Default to no surge
+    }
+  }
+
+  Future<void> _loadRecentSearches() async {
+    if (_authService.firebaseUser.value == null) return;
+
+    DevLogs.debug('Loading recent searches');
+    try {
+      final userId = _authService.firebaseUser.value!.uid;
+      final doc = await _firestore
+          .collection(Constants.usersCollection)
+          .doc(userId)
+          .collection('app_data')
+          .doc('searches')
+          .get();
+
+      if (doc.exists) {
+        final data = doc.data()!;
+        final searches = List<String>.from(data['recent'] ?? []);
+        recentSearches.value = searches;
+        DevLogs.debug('Loaded ${searches.length} recent searches');
       }
     } catch (e) {
-      print('Error loading surge pricing: $e');
-      surgeFactor.value = 1.0; // Default to no surge
+      DevLogs.error('Error loading recent searches', exception: e);
+    }
+  }
+
+  Future<void> _saveRecentSearch(String query) async {
+    if (_authService.firebaseUser.value == null || query.isEmpty) return;
+
+    DevLogs.debug('Saving recent search: $query');
+    try {
+      final userId = _authService.firebaseUser.value!.uid;
+
+      // Add to local list first
+      final searches = [...recentSearches];
+
+      // Remove if already exists
+      searches.remove(query);
+
+      // Add to beginning
+      searches.insert(0, query);
+
+      // Keep only the most recent 10
+      if (searches.length > 10) {
+        searches.removeLast();
+      }
+
+      recentSearches.value = searches;
+
+      // Save to Firestore
+      await _firestore
+          .collection(Constants.usersCollection)
+          .doc(userId)
+          .collection('app_data')
+          .doc('searches')
+          .set({
+        'recent': searches,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      DevLogs.error('Error saving recent search', exception: e);
+    }
+  }
+
+  Future<List<LocationModel>> searchPlaces(String query) async {
+    if (query.isEmpty) {
+      searchResults.clear();
+      return [];
+    }
+
+    isSearching.value = true;
+    DevLogs.debug('Searching places: $query');
+
+    try {
+      // Save search query
+      await _saveRecentSearch(query);
+
+      // Get current location for better results
+      final location = currentLocation.value.latitude != 0 ? currentLocation.value : null;
+
+      // Search places
+      final results = await _locationService.searchPlaces(query, location);
+      searchResults.value = results;
+
+      DevLogs.debug('Found ${results.length} places');
+
+      return results;
+    } catch (e) {
+      DevLogs.error('Error searching places', exception: e);
+      Get.snackbar(
+        'Error',
+        'Failed to search places. Please try again.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return [];
+    } finally {
+      isSearching.value = false;
     }
   }
 
@@ -738,7 +899,8 @@ class RiderController extends GetxController {
     if (_authService.firebaseUser.value == null) return;
 
     isRequestingRide.value = true;
-    rideStatus.value = 'searching';
+    rideStatus.value = Constants.pending;
+    DevLogs.info('Requesting ride');
 
     try {
       final userId = _authService.firebaseUser.value!.uid;
@@ -748,34 +910,23 @@ class RiderController extends GetxController {
       await calculateFare();
 
       // Create ride request
-      final ride = {
-        'id': rideId,
-        'riderId': userId,
-        'driverId': null,
-        'pickup': pickupLocation.value,
-        'dropoff': dropoffLocation.value,
-        'rideType': selectedRideType.value,
-        'paymentMethod': selectedPaymentMethod.value,
-        'fare': fareEstimate.value!.totalFare,
-        'distance': distanceToDestination.value,
-        'duration': durationToDestination.value,
-        'status': 'requested',
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-        'acceptedAt': null,
-        'arrivedAt': null,
-        'startedAt': null,
-        'completedAt': null,
-        'cancelledAt': null,
-        'cancelledBy': null,
-        'cancellationReason': null,
-        'driverRating': null,
-        'driverFeedback': null,
-        'isPaid': false,
-      };
+      final ride = RideModel(
+        id: rideId,
+        riderId: userId,
+        pickup: pickupLocation.value!,
+        dropoff: dropoffLocation.value!,
+        rideType: selectedRideType.value,
+        paymentMethod: selectedPaymentMethod.value,
+        fare: fareEstimate.value!.totalFare,
+        distance: distanceToDestination.value,
+        duration: durationToDestination.value,
+        status: Constants.pending,
+        createdAt: DateTime.now(),
+        polyline: polylineString,
+      );
 
       // Save ride to Firestore
-      await _firestore.collection('rides').doc(rideId).set(ride);
+      await _firestore.collection(Constants.ridesCollection).doc(rideId).set(ride.toMap());
 
       // Start listening for ride updates
       _listenForRideUpdates(rideId);
@@ -783,14 +934,12 @@ class RiderController extends GetxController {
       // Save recent location
       _saveRecentLocation(dropoffLocation.value!);
 
-      // For demo purposes, simulate ride acceptance after 5 seconds
-      if (GetPlatform.isAndroid) {
-        Future.delayed(const Duration(seconds: 5), () {
-          _simulateRideAcceptance(rideId);
-        });
-      }
+      // Send notifications to nearby drivers
+      await _notificationService.sendRideRequestNotification(rideId, ride.toMap());
+
+      DevLogs.info('Ride requested successfully: $rideId');
     } catch (e) {
-      print('Error requesting ride: $e');
+      DevLogs.error('Error requesting ride', exception: e);
       isRequestingRide.value = false;
       rideStatus.value = 'idle';
 
@@ -804,92 +953,38 @@ class RiderController extends GetxController {
     }
   }
 
-  // For demo purposes only
-  Future<void> _simulateRideAcceptance(String rideId) async {
-    try {
-      // Simulate a driver accepting the ride
-      await _firestore.collection('rides').doc(rideId).update({
-        'driverId': 'demo_driver_id',
-        'status': 'accepted',
-        'acceptedAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      // Simulate driver arrival after 10 seconds
-      Future.delayed(const Duration(seconds: 10), () {
-        _simulateDriverArrival(rideId);
-      });
-    } catch (e) {
-      print('Error simulating ride acceptance: $e');
-    }
-  }
-
-  // For demo purposes only
-  Future<void> _simulateDriverArrival(String rideId) async {
-    try {
-      await _firestore.collection('rides').doc(rideId).update({
-        'status': 'arrived',
-        'arrivedAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      // Simulate ride start after 5 seconds
-      Future.delayed(const Duration(seconds: 5), () {
-        _simulateRideStart(rideId);
-      });
-    } catch (e) {
-      print('Error simulating driver arrival: $e');
-    }
-  }
-
-  // For demo purposes only
-  Future<void> _simulateRideStart(String rideId) async {
-    try {
-      await _firestore.collection('rides').doc(rideId).update({
-        'status': 'started',
-        'startedAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      // Simulate ride completion after 15 seconds
-      Future.delayed(const Duration(seconds: 15), () {
-        _simulateRideCompletion(rideId);
-      });
-    } catch (e) {
-      print('Error simulating ride start: $e');
-    }
-  }
-
-  // For demo purposes only
-  Future<void> _simulateRideCompletion(String rideId) async {
-    try {
-      await _firestore.collection('rides').doc(rideId).update({
-        'status': 'completed',
-        'completedAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-        'isPaid': true,
-      });
-    } catch (e) {
-      print('Error simulating ride completion: $e');
-    }
-  }
-
   Future<void> cancelRide() async {
     if (currentRide.value == null) return;
 
+    DevLogs.info('Cancelling ride: ${currentRide.value!.id}');
     try {
-      await _firestore.collection('rides').doc(currentRide.value!.id).update({
-        'status': 'cancelled',
+      await _firestore.collection(Constants.ridesCollection).doc(currentRide.value!.id).update({
+        'status': Constants.cancelled,
         'cancelledAt': FieldValue.serverTimestamp(),
         'cancelledBy': 'rider',
         'cancellationReason': 'Cancelled by rider',
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
+      // If driver was assigned, send cancellation notification
+      if (currentRide.value!.driverId != null) {
+        await _notificationService.sendNotificationToUser(
+          currentRide.value!.driverId!,
+          'Ride Cancelled',
+          'The rider has cancelled the ride',
+          {
+            'type': NotificationService.rideCancelled,
+            'rideId': currentRide.value!.id,
+          },
+        );
+      }
+
       // Reset state
       _resetRideState();
+
+      DevLogs.info('Ride cancelled successfully');
     } catch (e) {
-      print('Error cancelling ride: $e');
+      DevLogs.error('Error cancelling ride', exception: e);
 
       Get.snackbar(
         'Error',
@@ -926,184 +1021,156 @@ class RiderController extends GetxController {
     // Clear pickup and dropoff
     pickupLocation.value = null;
     dropoffLocation.value = null;
+
+    DevLogs.debug('Ride state reset');
   }
 
-  Future<void> _saveRecentLocation(Map<String, dynamic> location) async {
+  Future<void> _saveRecentLocation(LocationModel location) async {
     if (_authService.firebaseUser.value == null) return;
 
+    DevLogs.debug('Saving recent location: ${location.name}');
     try {
       final userId = _authService.firebaseUser.value!.uid;
 
       // Check if location already exists
       final existingLocations = savedLocations.where((loc) {
-        return loc.address == location['address'];
+        return loc.address == location.address;
       }).toList();
 
       if (existingLocations.isNotEmpty) {
         // Update existing location
         await _firestore
-            .collection('users')
+            .collection(Constants.usersCollection)
             .doc(userId)
-            .collection('saved_locations')
+            .collection(Constants.savedLocationsCollection)
             .doc(existingLocations.first.id)
             .update({
           'updatedAt': FieldValue.serverTimestamp(),
         });
       } else {
         // Add new location
-        final newLocation = {
-          'userId': userId,
-          'name': location['name'],
-          'address': location['address'],
-          'latitude': location['latitude'],
-          'longitude': location['longitude'],
-          'type': 'recent',
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        };
+        final newLocation = SavedLocationModel(
+          id: const Uuid().v4(),
+          name: location.name,
+          address: location.address,
+          latitude: location.latitude,
+          longitude: location.longitude,
+          type: LocationType.recent,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
 
         await _firestore
-            .collection('users')
+            .collection(Constants.usersCollection)
             .doc(userId)
-            .collection('saved_locations')
-            .add(newLocation);
+            .collection(Constants.savedLocationsCollection)
+            .doc(newLocation.id)
+            .set(newLocation.toMap());
       }
 
       // Reload saved locations
       _loadSavedLocations();
     } catch (e) {
-      print('Error saving recent location: $e');
+      DevLogs.error('Error saving recent location', exception: e);
     }
   }
 
-  Future<void> saveHomeLocation(String name, String address, double latitude, double longitude) async {
+  Future<void> saveLocation(Map<String, dynamic> locationData) async {
     if (_authService.firebaseUser.value == null) return;
 
+    DevLogs.debug('Saving location: ${locationData['name']}');
     try {
       final userId = _authService.firebaseUser.value!.uid;
 
-      // Check if home location already exists
-      final homeLocations = savedLocations.where((loc) => loc.type == 'home').toList();
-
-      if (homeLocations.isNotEmpty) {
-        // Update existing home location
-        await _firestore
-            .collection('users')
-            .doc(userId)
-            .collection('saved_locations')
-            .doc(homeLocations.first.id)
-            .update({
-          'name': name,
-          'address': address,
-          'latitude': latitude,
-          'longitude': longitude,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-      } else {
-        // Add new home location
-        final newLocation = {
-          'userId': userId,
-          'name': name,
-          'address': address,
-          'latitude': latitude,
-          'longitude': longitude,
-          'type': 'home',
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        };
-
-        await _firestore
-            .collection('users')
-            .doc(userId)
-            .collection('saved_locations')
-            .add(newLocation);
-      }
-
-      // Reload saved locations
-      _loadSavedLocations();
-    } catch (e) {
-      print('Error saving home location: $e');
-    }
-  }
-
-  Future<void> saveWorkLocation(String name, String address, double latitude, double longitude) async {
-    if (_authService.firebaseUser.value == null) return;
-
-    try {
-      final userId = _authService.firebaseUser.value!.uid;
-
-      // Check if work location already exists
-      final workLocations = savedLocations.where((loc) => loc.type == 'work').toList();
-
-      if (workLocations.isNotEmpty) {
-        // Update existing work location
-        await _firestore
-            .collection('users')
-            .doc(userId)
-            .collection('saved_locations')
-            .doc(workLocations.first.id)
-            .update({
-          'name': name,
-          'address': address,
-          'latitude': latitude,
-          'longitude': longitude,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-      } else {
-        // Add new work location
-        final newLocation = {
-          'userId': userId,
-          'name': name,
-          'address': address,
-          'latitude': latitude,
-          'longitude': longitude,
-          'type': 'work',
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        };
-
-        await _firestore
-            .collection('users')
-            .doc(userId)
-            .collection('saved_locations')
-            .add(newLocation);
-      }
-
-      // Reload saved locations
-      _loadSavedLocations();
-    } catch (e) {
-      print('Error saving work location: $e');
-    }
-  }
-
-  Future<void> saveFavoriteLocation(String name, String address, double latitude, double longitude) async {
-    if (_authService.firebaseUser.value == null) return;
-
-    try {
-      final userId = _authService.firebaseUser.value!.uid;
-
-      // Add new favorite location
-      final newLocation = {
-        'userId': userId,
-        'name': name,
-        'address': address,
-        'latitude': latitude,
-        'longitude': longitude,
-        'type': 'favorite',
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
+      // Create location model
+      final location = SavedLocationModel(
+        id: const Uuid().v4(),
+        name: locationData['name'],
+        address: locationData['address'],
+        latitude: locationData['latitude'],
+        longitude: locationData['longitude'],
+        type: _getLocationType(locationData['type']),
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
 
       await _firestore
-          .collection('users')
+          .collection(Constants.usersCollection)
           .doc(userId)
-          .collection('saved_locations')
-          .add(newLocation);
+          .collection(Constants.savedLocationsCollection)
+          .doc(location.id)
+          .set(location.toMap());
 
       // Reload saved locations
       _loadSavedLocations();
+
+      DevLogs.debug('Location saved successfully');
     } catch (e) {
-      print('Error saving favorite location: $e');
+      DevLogs.error('Error saving location', exception: e);
+      throw e;
+    }
+  }
+
+  LocationType _getLocationType(String type) {
+    switch (type) {
+      case 'home':
+        return LocationType.home;
+      case 'work':
+        return LocationType.work;
+      case 'favorite':
+        return LocationType.favorite;
+      case 'recent':
+        return LocationType.recent;
+      default:
+        return LocationType.custom;
+    }
+  }
+
+  Future<void> updateLocation(SavedLocationModel location) async {
+    if (_authService.firebaseUser.value == null) return;
+
+    DevLogs.debug('Updating location: ${location.id}');
+    try {
+      final userId = _authService.firebaseUser.value!.uid;
+
+      await _firestore
+          .collection(Constants.usersCollection)
+          .doc(userId)
+          .collection(Constants.savedLocationsCollection)
+          .doc(location.id)
+          .update(location.toMap());
+
+      // Reload saved locations
+      _loadSavedLocations();
+
+      DevLogs.debug('Location updated successfully');
+    } catch (e) {
+      DevLogs.error('Error updating location', exception: e);
+      throw e;
+    }
+  }
+
+  Future<void> deleteLocation(String locationId) async {
+    if (_authService.firebaseUser.value == null) return;
+
+    DevLogs.debug('Deleting location: $locationId');
+    try {
+      final userId = _authService.firebaseUser.value!.uid;
+
+      await _firestore
+          .collection(Constants.usersCollection)
+          .doc(userId)
+          .collection(Constants.savedLocationsCollection)
+          .doc(locationId)
+          .delete();
+
+      // Reload saved locations
+      _loadSavedLocations();
+
+      DevLogs.debug('Location deleted successfully');
+    } catch (e) {
+      DevLogs.error('Error deleting location', exception: e);
+      throw e;
     }
   }
 
@@ -1120,10 +1187,7 @@ class RiderController extends GetxController {
       if (driverMarker.markerId.value == 'not_found') return;
 
       // Get pickup location
-      final pickupLatLng = LatLng(
-        pickupLocation.value!['latitude'],
-        pickupLocation.value!['longitude'],
-      );
+      final pickupLatLng = pickupLocation.value!.latLng;
 
       // Calculate distance
       final distance = _calculateDistance(
@@ -1138,8 +1202,10 @@ class RiderController extends GetxController {
 
       distanceToPickup.value = distance;
       durationToPickup.value = duration;
+
+      DevLogs.debug('ETA to pickup: ${distance.toStringAsFixed(2)} km, ${duration.toStringAsFixed(0)} min');
     } catch (e) {
-      print('Error updating ETA to pickup: $e');
+      DevLogs.error('Error updating ETA to pickup', exception: e);
     }
   }
 
@@ -1148,10 +1214,7 @@ class RiderController extends GetxController {
 
     try {
       // Get dropoff location
-      final dropoffLatLng = LatLng(
-        dropoffLocation.value!['latitude'],
-        dropoffLocation.value!['longitude'],
-      );
+      final dropoffLatLng = dropoffLocation.value!.latLng;
 
       // Calculate distance
       final distance = _calculateDistance(
@@ -1166,14 +1229,17 @@ class RiderController extends GetxController {
 
       distanceToDestination.value = distance;
       durationToDestination.value = duration;
+
+      DevLogs.debug('ETA to destination: ${distance.toStringAsFixed(2)} km, ${duration.toStringAsFixed(0)} min');
     } catch (e) {
-      print('Error updating ETA to destination: $e');
+      DevLogs.error('Error updating ETA to destination', exception: e);
     }
   }
 
   Future<RideModel?> getRideDetails(String rideId) async {
+    DevLogs.debug('Getting ride details: $rideId');
     try {
-      final doc = await _firestore.collection('rides').doc(rideId).get();
+      final doc = await _firestore.collection(Constants.ridesCollection).doc(rideId).get();
 
       if (doc.exists) {
         return RideModel.fromMap(doc.data()!, doc.id);
@@ -1181,15 +1247,16 @@ class RiderController extends GetxController {
 
       return null;
     } catch (e) {
-      print('Error getting ride details: $e');
+      DevLogs.error('Error getting ride details', exception: e);
       return null;
     }
   }
 
   Future<Map<String, dynamic>?> getDriverDetails(String driverId) async {
+    DevLogs.debug('Getting driver details: $driverId');
     try {
-      final userDoc = await _firestore.collection('users').doc(driverId).get();
-      final driverDoc = await _firestore.collection('drivers').doc(driverId).get();
+      final userDoc = await _firestore.collection(Constants.usersCollection).doc(driverId).get();
+      final driverDoc = await _firestore.collection(Constants.driversCollection).doc(driverId).get();
 
       if (userDoc.exists && driverDoc.exists) {
         final userData = userDoc.data()!;
@@ -1203,30 +1270,43 @@ class RiderController extends GetxController {
 
       return null;
     } catch (e) {
-      print('Error getting driver details: $e');
+      DevLogs.error('Error getting driver details', exception: e);
       return null;
     }
   }
 
-  Future<void> rateDriver(double rating, String feedback) async {
-    if (currentRide.value == null) return;
-
+  Future<void> rateDriver(String rideId, double rating, String feedback) async {
+    DevLogs.info('Rating driver for ride: $rideId');
     isLoading.value = true;
 
     try {
-      await _firestore.collection('rides').doc(currentRide.value!.id).update({
+      await _firestore.collection(Constants.ridesCollection).doc(rideId).update({
         'driverRating': rating,
         'driverFeedback': feedback,
         'updatedAt': FieldValue.serverTimestamp(),
       });
+
+      // Get driver ID from ride
+      final rideDoc = await _firestore.collection(Constants.ridesCollection).doc(rideId).get();
+      if (rideDoc.exists) {
+        final rideData = rideDoc.data()!;
+        final driverId = rideData['driverId'];
+
+        if (driverId != null) {
+          // Update driver's average rating
+          await _updateDriverRating(driverId, rating);
+        }
+      }
 
       Get.snackbar(
         'Thank You',
         'Your rating has been submitted',
         snackPosition: SnackPosition.BOTTOM,
       );
+
+      DevLogs.info('Driver rated successfully');
     } catch (e) {
-      print('Error rating driver: $e');
+      DevLogs.error('Error rating driver', exception: e);
       Get.snackbar(
         'Error',
         'Failed to submit rating',
@@ -1237,19 +1317,58 @@ class RiderController extends GetxController {
     }
   }
 
-  Future<void> reportDriver(String issues, String details) async {
-    if (currentRide.value == null) return;
+  Future<void> _updateDriverRating(String driverId, double newRating) async {
+    try {
+      // Get driver document
+      final driverDoc = await _firestore.collection(Constants.driversCollection).doc(driverId).get();
 
+      if (driverDoc.exists) {
+        final data = driverDoc.data()!;
+        final currentRating = data['rating'] ?? 0.0;
+        final ratingCount = data['ratingCount'] ?? 0;
+
+        // Calculate new average rating
+        final newAvgRating = ((currentRating * ratingCount) + newRating) / (ratingCount + 1);
+
+        // Update driver document
+        await _firestore.collection(Constants.driversCollection).doc(driverId).update({
+          'rating': newAvgRating,
+          'ratingCount': ratingCount + 1,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        DevLogs.debug('Driver rating updated: $newAvgRating (${ratingCount + 1} ratings)');
+      }
+    } catch (e) {
+      DevLogs.error('Error updating driver rating', exception: e);
+    }
+  }
+
+  Future<void> reportDriver(String rideId, String issues, String details) async {
+    DevLogs.info('Reporting driver for ride: $rideId');
     isLoading.value = true;
 
     try {
       final userId = _authService.firebaseUser.value!.uid;
 
+      // Get ride details to get driver ID
+      final rideDoc = await _firestore.collection(Constants.ridesCollection).doc(rideId).get();
+      if (!rideDoc.exists) {
+        throw Exception('Ride not found');
+      }
+
+      final rideData = rideDoc.data()!;
+      final driverId = rideData['driverId'];
+
+      if (driverId == null) {
+        throw Exception('Driver ID not found in ride data');
+      }
+
       // Create report
       final report = {
         'reporterId': userId,
-        'reportedUserId': currentRide.value!.driverId,
-        'rideId': currentRide.value!.id,
+        'reportedUserId': driverId,
+        'rideId': rideId,
         'issues': issues,
         'details': details,
         'status': 'pending',
@@ -1257,15 +1376,17 @@ class RiderController extends GetxController {
         'updatedAt': FieldValue.serverTimestamp(),
       };
 
-      await _firestore.collection('reports').add(report);
+      await _firestore.collection(Constants.reportsCollection).add(report);
 
       Get.snackbar(
         'Report Submitted',
         'Thank you for your report. We will review it shortly.',
         snackPosition: SnackPosition.BOTTOM,
       );
+
+      DevLogs.info('Driver reported successfully');
     } catch (e) {
-      print('Error reporting driver: $e');
+      DevLogs.error('Error reporting driver', exception: e);
       Get.snackbar(
         'Error',
         'Failed to submit report',
@@ -1280,14 +1401,15 @@ class RiderController extends GetxController {
     if (_authService.firebaseUser.value == null) return [];
 
     isLoadingRideHistory.value = true;
+    DevLogs.debug('Fetching ride history');
 
     try {
       final String userId = _authService.firebaseUser.value!.uid;
 
       final QuerySnapshot snapshot = await _firestore
-          .collection('rides')
+          .collection(Constants.ridesCollection)
           .where('riderId', isEqualTo: userId)
-          .where('status', whereIn: ['completed', 'cancelled'])
+          .where('status', whereIn: [Constants.completed, Constants.cancelled])
           .orderBy('createdAt', descending: true)
           .get();
 
@@ -1296,9 +1418,10 @@ class RiderController extends GetxController {
           .toList();
 
       rideHistory.value = rides;
+      DevLogs.debug('Fetched ${rides.length} rides');
       return rides;
     } catch (e) {
-      print('Error fetching ride history: $e');
+      DevLogs.error('Error fetching ride history', exception: e);
       return [];
     } finally {
       isLoadingRideHistory.value = false;
@@ -1309,10 +1432,7 @@ class RiderController extends GetxController {
     if (pickupLocation.value != null) {
       await _updateLocationMarker(
         'pickup_location',
-        LatLng(
-          pickupLocation.value!['latitude'],
-          pickupLocation.value!['longitude'],
-        ),
+        pickupLocation.value!.latLng,
         'assets/images/pickup_marker.png',
       );
     }
@@ -1320,10 +1440,7 @@ class RiderController extends GetxController {
     if (dropoffLocation.value != null) {
       await _updateLocationMarker(
         'dropoff_location',
-        LatLng(
-          dropoffLocation.value!['latitude'],
-          dropoffLocation.value!['longitude'],
-        ),
+        dropoffLocation.value!.latLng,
         'assets/images/dropoff_marker.png',
       );
     }
@@ -1332,10 +1449,11 @@ class RiderController extends GetxController {
   void callDriver() {
     if (driverInfo.value == null) return;
 
-    final phone = driverInfo.value!['user']['phoneNumber'];
+    final phone = driverInfo.value!['user'].phoneNumber;
     if (phone != null && phone.isNotEmpty) {
       // Launch phone call
       _safetyService.makePhoneCall(phone);
+      DevLogs.info('Calling driver: $phone');
     } else {
       Get.snackbar(
         'Error',
@@ -1345,11 +1463,20 @@ class RiderController extends GetxController {
     }
   }
 
+  void messageDriver() {
+    if (currentRide.value == null || driverInfo.value == null) return;
+
+    // Navigate to chat screen
+    Get.toNamed('/chat/${currentRide.value!.id}');
+    DevLogs.info('Opening chat with driver');
+  }
+
   void showReceipt() {
     if (currentRide.value == null) return;
 
     // Navigate to receipt screen
-    Get.toNamed('/receipt/${currentRide.value!.id}');
+    Get.toNamed('/rider/receipt/${currentRide.value!.id}');
+    DevLogs.info('Showing receipt for ride: ${currentRide.value!.id}');
   }
 
   void resetRide() {
@@ -1373,266 +1500,159 @@ class RiderController extends GetxController {
         CameraUpdate.newLatLngZoom(currentLocation.value, 15),
       );
     }
+
+    DevLogs.debug('Ride reset');
   }
 
+  void setNavIndex(int index) {
+    selectedNavIndex.value = index;
+    DevLogs.debug('Navigation index set to: $index');
+  }
 
-  // Add these methods to the RiderController class
-
-  /// Save a new location to the user's saved locations
-  Future<void> saveLocation(Map<String, dynamic> location) async {
-    if (_authService.firebaseUser.value == null) {
-      throw Exception('User not authenticated');
-    }
-
-    isLoading.value = true;
-
+  Future<void> getCurrentLocation() async {
+    DevLogs.debug('Getting current location for pickup');
     try {
-      final userId = _authService.firebaseUser.value!.uid;
-
-      // Validate required fields
-      if (location['name'] == null || location['name'].isEmpty ||
-          location['address'] == null || location['address'].isEmpty ||
-          location['latitude'] == null || location['longitude'] == null) {
-        throw Exception('Missing required location fields');
+      if (currentLocation.value.latitude == 0) {
+        // Wait for location to be available
+        await Future.delayed(const Duration(seconds: 2));
       }
 
-      // Set default type if not provided
-      final locationType = location['type'] ?? 'saved';
+      if (currentLocation.value.latitude != 0) {
+        // Reverse geocode to get address
+        final location = await _locationService.reverseGeocode(currentLocation.value);
 
-      // Check if location with same type already exists (for home/work)
-      if (locationType == 'home' || locationType == 'work') {
-        final existingLocations = savedLocations.where((loc) => loc.type == locationType).toList();
+        // Set as pickup location
+        await setPickupLocation(location);
 
-        if (existingLocations.isNotEmpty) {
-          // Update existing location instead of creating new one
-          await updateLocation({
-            'id': existingLocations.first.id,
-            ...location,
-          });
-          return;
-        }
+        DevLogs.debug('Current location set as pickup: ${location.address}');
+      } else {
+        Get.snackbar(
+          'Error',
+          'Unable to get your current location. Please check your location settings.',
+          snackPosition: SnackPosition.BOTTOM,
+        );
       }
-
-      // Create new location document
-      final newLocation = {
-        'userId': userId,
-        'name': location['name'],
-        'address': location['address'],
-        'latitude': location['latitude'],
-        'longitude': location['longitude'],
-        'type': locationType,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
-
-      // Add to Firestore
-      final docRef = await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('saved_locations')
-          .add(newLocation);
-
-      // Update local list
-      final savedLocation = SavedLocationModel.fromMap({
-        ...newLocation,
-        'id': docRef.id,
-        'createdAt': DateTime.now(),
-        'updatedAt': DateTime.now(),
-      });
-
-      savedLocations.add(savedLocation);
-
-      // Update specific location references
-      if (locationType == 'home') {
-        homeLocation.value = savedLocation;
-      } else if (locationType == 'work') {
-        workLocation.value = savedLocation;
-      }
-
-      Get.snackbar(
-        'Success',
-        'Location saved successfully',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.green,
-        colorText: Colors.white,
-      );
     } catch (e) {
-      print('Error saving location: $e');
+      DevLogs.error('Error getting current location', exception: e);
       Get.snackbar(
         'Error',
-        'Failed to save location: ${e.toString()}',
+        'Failed to get your current location. Please try again.',
         snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
       );
-      rethrow;
-    } finally {
-      isLoading.value = false;
     }
   }
 
-  /// Update an existing saved location
-  Future<void> updateLocation(Map<String, dynamic> updatedLocation) async {
-    if (_authService.firebaseUser.value == null) {
-      throw Exception('User not authenticated');
+  void toggleThemeMode() {
+    if (themeMode.value == ThemeMode.light) {
+      themeMode.value = ThemeMode.dark;
+    } else {
+      themeMode.value = ThemeMode.light;
     }
 
-    isLoading.value = true;
+    DevLogs.debug('Theme mode toggled to: ${themeMode.value}');
+  }
+}
+
+extension RiderControllerExtension on RiderController {
+  // Method to search places
+  Future<List<LocationModel>> searchPlaces(String query) async {
+    isSearching.value = true;
+    searchQuery.value = query;
 
     try {
-      final userId = _authService.firebaseUser.value!.uid;
+      // Get current location for better results
+      final location = currentLocation.value.latitude != 0 ? currentLocation.value : null;
 
-      // Validate required fields
-      if (updatedLocation['id'] == null || updatedLocation['id'].isEmpty) {
+      // Search places using location service
+      final results = await _locationService.searchPlaces(query, location);
+
+      // Save search query to recent searches
+      await _saveRecentSearch(query);
+
+      DevLogs.debug('Found ${results.length} places for query: $query');
+      return results;
+    } catch (e) {
+      DevLogs.error('Error searching places', exception: e);
+      return [];
+    } finally {
+      isSearching.value = false;
+    }
+  }
+
+  // Method to reverse geocode a location from map tap
+  Future<LocationModel> reverseGeocode(LatLng position) async {
+    try {
+      final location = await _locationService.reverseGeocode(position);
+      DevLogs.debug('Reverse geocoded location: ${location.name}');
+      return location;
+    } catch (e) {
+      DevLogs.error('Error reverse geocoding', exception: e);
+      throw Exception('Failed to get location details');
+    }
+  }
+
+  // Method to update a saved location
+  Future<void> updateLocation(Map<String, dynamic> location) async {
+    try {
+      // Check if location has an ID
+      if (location['id'] == null) {
         throw Exception('Location ID is required for update');
       }
 
-      final locationId = updatedLocation['id'];
-
-      // Find the location in local list
-      final locationIndex = savedLocations.indexWhere((loc) => loc.id == locationId);
-      if (locationIndex == -1) {
+      // Find the location in the saved locations
+      final index = savedLocations.indexWhere((loc) => loc.id == location['id']);
+      if (index == -1) {
         throw Exception('Location not found');
       }
 
-      // Prepare update data
-      final updateData = <String, dynamic>{
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
-
-      // Only include fields that are provided and not null
-      if (updatedLocation['name'] != null) {
-        updateData['name'] = updatedLocation['name'];
-      }
-      if (updatedLocation['address'] != null) {
-        updateData['address'] = updatedLocation['address'];
-      }
-      if (updatedLocation['latitude'] != null) {
-        updateData['latitude'] = updatedLocation['latitude'];
-      }
-      if (updatedLocation['longitude'] != null) {
-        updateData['longitude'] = updatedLocation['longitude'];
-      }
-      if (updatedLocation['type'] != null) {
-        updateData['type'] = updatedLocation['type'];
-      }
+      // Create updated location model
+      final updatedLocation = SavedLocationModel(
+        id: location['id'],
+        name: location['name'],
+        address: location['address'],
+        latitude: location['latitude'],
+        longitude: location['longitude'],
+        type: location['type'],
+        updatedAt: DateTime.now(),
+      );
 
       // Update in Firestore
       await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('saved_locations')
-          .doc(locationId)
-          .update(updateData);
+          .collection(Constants.usersCollection)
+          .doc(_authService.firebaseUser.value!.uid)
+          .collection(Constants.savedLocationsCollection)
+          .doc(updatedLocation.id)
+          .update(updatedLocation.toMap());
 
-      // Update local list
-      final currentLocation = savedLocations[locationIndex];
-      final updatedLocationModel = SavedLocationModel.fromMap({
-        'id': currentLocation.id,
-        'userId': userId,
-        'name': updatedLocation['name'] ?? currentLocation.name,
-        'address': updatedLocation['address'] ?? currentLocation.address,
-        'latitude': updatedLocation['latitude'] ?? currentLocation.latitude,
-        'longitude': updatedLocation['longitude'] ?? currentLocation.longitude,
-        'type': updatedLocation['type'] ?? currentLocation.type,
-        'updatedAt': DateTime.now(),
-      });
+      // Update in local list
+      savedLocations[index] = updatedLocation;
+      savedLocations.refresh();
 
-      savedLocations[locationIndex] = updatedLocationModel;
-
-      // Update specific location references if needed
-      if (updatedLocationModel.type == 'home') {
-        homeLocation.value = updatedLocationModel;
-      } else if (updatedLocationModel.type == 'work') {
-        workLocation.value = updatedLocationModel;
-      }
-
-      Get.snackbar(
-        'Success',
-        'Location updated successfully',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.green,
-        colorText: Colors.white,
-      );
+      DevLogs.debug('Location updated: ${updatedLocation.name}');
     } catch (e) {
-      print('Error updating location: $e');
-      Get.snackbar(
-        'Error',
-        'Failed to update location: ${e.toString()}',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
-      rethrow;
-    } finally {
-      isLoading.value = false;
+      DevLogs.error('Error updating location', exception: e);
+      throw Exception('Failed to update location: $e');
     }
   }
 
-  /// Delete a saved location
-  Future<void> deleteLocation(String locationId) async {
-    if (_authService.firebaseUser.value == null) {
-      throw Exception('User not authenticated');
-    }
-
-    isLoading.value = true;
+  // Method to load user profile
+  Future<UserModel?> loadUserProfile() async {
+    if (_authService.firebaseUser.value == null) return null;
 
     try {
       final userId = _authService.firebaseUser.value!.uid;
+      final doc = await _firestore.collection(Constants.usersCollection).doc(userId).get();
 
-      // Validate location ID
-      if (locationId.isEmpty) {
-        throw Exception('Location ID is required');
+      if (doc.exists) {
+        userProfile.value = UserModel.fromMap(doc.data()!, userId);
+        DevLogs.debug('User profile loaded: ${userProfile.value?.fullName}');
+        return userProfile.value;
       }
-
-      // Find the location in local list
-      final locationIndex = savedLocations.indexWhere((loc) => loc.id == locationId);
-      if (locationIndex == -1) {
-        throw Exception('Location not found');
-      }
-
-      final locationToDelete = savedLocations[locationIndex];
-
-      // Delete from Firestore
-      await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('saved_locations')
-          .doc(locationId)
-          .delete();
-
-      // Remove from local list
-      savedLocations.removeAt(locationIndex);
-
-      // Clear specific location references if needed
-      if (homeLocation.value?.id == locationId) {
-        homeLocation.value = null;
-      }
-      if (workLocation.value?.id == locationId) {
-        workLocation.value = null;
-      }
-
-      Get.snackbar(
-        'Success',
-        'Location deleted successfully',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.green,
-        colorText: Colors.white,
-      );
     } catch (e) {
-      print('Error deleting location: $e');
-      Get.snackbar(
-        'Error',
-        'Failed to delete location: ${e.toString()}',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
-      rethrow;
-    } finally {
-      isLoading.value = false;
+      DevLogs.error('Error loading user profile', exception: e);
+      return null;
+
     }
+    return null;
   }
-
-
 }

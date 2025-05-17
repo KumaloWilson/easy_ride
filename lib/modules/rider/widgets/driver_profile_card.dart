@@ -60,7 +60,7 @@ class DriverProfileCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 16),
-
+            
             // Driver info
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -76,15 +76,15 @@ class DriverProfileCard extends StatelessWidget {
                         : null,
                     child: user.profileImageUrl == null
                         ? const Icon(
-                      Icons.person,
-                      size: 40,
-                      color: Colors.grey,
-                    )
+                            Icons.person,
+                            size: 40,
+                            color: Colors.grey,
+                          )
                         : null,
                   ),
                 ),
                 const SizedBox(width: 16),
-
+                
                 // Driver details
                 Expanded(
                   child: Column(
@@ -98,7 +98,7 @@ class DriverProfileCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 4),
-
+                      
                       // Rating
                       Row(
                         children: [
@@ -127,7 +127,7 @@ class DriverProfileCard extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 8),
-
+                      
                       // Contact buttons
                       Row(
                         children: [
@@ -151,11 +151,11 @@ class DriverProfileCard extends StatelessWidget {
                 ),
               ],
             ),
-
+            
             const SizedBox(height: 16),
             const Divider(),
             const SizedBox(height: 16),
-
+            
             // Vehicle details
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -168,7 +168,7 @@ class DriverProfileCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-
+                
                 // Vehicle info
                 Row(
                   children: [
@@ -210,13 +210,13 @@ class DriverProfileCard extends StatelessWidget {
                 ),
               ],
             ),
-
+            
             // Additional details for detailed view
             if (isDetailed) ...[
               const SizedBox(height: 16),
               const Divider(),
               const SizedBox(height: 16),
-
+              
               // Safety tips
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -250,11 +250,11 @@ class DriverProfileCard extends StatelessWidget {
         ),
       ),
     );
-
+    
     if (!isAnimated) {
       return card;
     }
-
+    
     return card.animate().custom(
       duration: const Duration(milliseconds: 400),
       builder: (context, value, child) => Transform.scale(

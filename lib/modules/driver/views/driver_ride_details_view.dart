@@ -31,8 +31,8 @@ class DriverRideDetailsView extends GetView<DriverController> {
                   riderId: '',
                   status: 'unknown',
                   rideType: '',
-                  pickup: {},
-                  dropoff: {},
+                  pickup: null,
+                  dropoff: null,
                   distance: 0,
                   duration: 0,
                   fare: 0,
@@ -76,33 +76,31 @@ class DriverRideDetailsView extends GetView<DriverController> {
                     controller.mapController.value = mapController;
                     
                     // Adjust camera to show the entire route
-                    if (ride.pickup.isNotEmpty && ride.dropoff.isNotEmpty) {
-                      final LatLng pickupLatLng = LatLng(
-                        ride.pickup['location']['lat'],
-                        ride.pickup['location']['lng'],
-                      );
-                      
-                      final LatLng dropoffLatLng = LatLng(
-                        ride.dropoff['location']['lat'],
-                        ride.dropoff['location']['lng'],
-                      );
-                      
-                      LatLngBounds bounds = LatLngBounds(
-                        southwest: LatLng(
-                          min(pickupLatLng.latitude, dropoffLatLng.latitude) - 0.01,
-                          min(pickupLatLng.longitude, dropoffLatLng.longitude) - 0.01,
-                        ),
-                        northeast: LatLng(
-                          max(pickupLatLng.latitude, dropoffLatLng.latitude) + 0.01,
-                          max(pickupLatLng.longitude, dropoffLatLng.longitude) + 0.01,
-                        ),
-                      );
-                      
-                      mapController.animateCamera(
-                        CameraUpdate.newLatLngBounds(bounds, 50),
-                      );
-                    }
-                  },
+                    final LatLng pickupLatLng = LatLng(
+                      ride.pickup!.latitude,
+                      ride.pickup!.longitude,
+                    );
+                    
+                    final LatLng dropoffLatLng = LatLng(
+                      ride.dropoff!.latitude,
+                      ride.dropoff!.longitude,
+                    );
+                    
+                    LatLngBounds bounds = LatLngBounds(
+                      southwest: LatLng(
+                        min(pickupLatLng.latitude, dropoffLatLng.latitude) - 0.01,
+                        min(pickupLatLng.longitude, dropoffLatLng.longitude) - 0.01,
+                      ),
+                      northeast: LatLng(
+                        max(pickupLatLng.latitude, dropoffLatLng.latitude) + 0.01,
+                        max(pickupLatLng.longitude, dropoffLatLng.longitude) + 0.01,
+                      ),
+                    );
+                    
+                    mapController.animateCamera(
+                      CameraUpdate.newLatLngBounds(bounds, 50),
+                    );
+                                    },
                 ),
               ),
               
@@ -328,13 +326,13 @@ class DriverRideDetailsView extends GetView<DriverController> {
                                         ),
                                       ),
                                       Text(
-                                        ride.pickup['name'] ?? 'Pickup Location',
+                                        ride.pickup!.name ?? 'Pickup Location',
                                         style: const TextStyle(
                                           fontWeight: FontWeight.w500,
                                         ),
                                       ),
                                       Text(
-                                        ride.pickup['address'] ?? '',
+                                        ride.pickup!.address ?? '',
                                         style: TextStyle(
                                           color: Colors.grey[600],
                                           fontSize: 12,
@@ -386,13 +384,13 @@ class DriverRideDetailsView extends GetView<DriverController> {
                                         ),
                                       ),
                                       Text(
-                                        ride.dropoff['name'] ?? 'Dropoff Location',
+                                        ride.dropoff!.name ?? 'Dropoff Location',
                                         style: const TextStyle(
                                           fontWeight: FontWeight.w500,
                                         ),
                                       ),
                                       Text(
-                                        ride.dropoff['address'] ?? '',
+                                        ride.dropoff!.address?? '',
                                         style: TextStyle(
                                           color: Colors.grey[600],
                                           fontSize: 12,
@@ -532,10 +530,10 @@ class DriverRideDetailsView extends GetView<DriverController> {
   Set<Marker> _buildRideMarkers(RideModel ride) {
     Set<Marker> markers = {};
     
-    if (ride.pickup.isNotEmpty) {
+    if (ride.pickup != null) {
       final LatLng pickupLatLng = LatLng(
-        ride.pickup['location']['lat'],
-        ride.pickup['location']['lng'],
+        ride.pickup!.latitude,
+        ride.pickup!.longitude,
       );
       
       markers.add(
@@ -543,15 +541,15 @@ class DriverRideDetailsView extends GetView<DriverController> {
           markerId: const MarkerId('pickup'),
           position: pickupLatLng,
           icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-          infoWindow: InfoWindow(title: 'Pickup', snippet: ride.pickup['name']),
+          infoWindow: InfoWindow(title: 'Pickup', snippet: ride.pickup!.name),
         ),
       );
     }
     
-    if (ride.dropoff.isNotEmpty) {
+    if (ride.dropoff != null) {
       final LatLng dropoffLatLng = LatLng(
-        ride.dropoff['location']['lat'],
-        ride.dropoff['location']['lng'],
+        ride.dropoff!.latitude,
+        ride.dropoff!.longitude,
       );
       
       markers.add(
@@ -559,7 +557,7 @@ class DriverRideDetailsView extends GetView<DriverController> {
           markerId: const MarkerId('dropoff'),
           position: dropoffLatLng,
           icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
-          infoWindow: InfoWindow(title: 'Dropoff', snippet: ride.dropoff['name']),
+          infoWindow: InfoWindow(title: 'Dropoff', snippet: ride.dropoff!.name),
         ),
       );
     }
@@ -570,15 +568,15 @@ class DriverRideDetailsView extends GetView<DriverController> {
   Set<Polyline> _buildRidePolylines(RideModel ride) {
     Set<Polyline> polylines = {};
     
-    if (ride.pickup.isNotEmpty && ride.dropoff.isNotEmpty) {
+    if (ride.pickup != null && ride.dropoff != null) {
       final LatLng pickupLatLng = LatLng(
-        ride.pickup['location']['lat'],
-        ride.pickup['location']['lng'],
+        ride.pickup!.latitude,
+        ride.pickup!.longitude,
       );
       
       final LatLng dropoffLatLng = LatLng(
-        ride.dropoff['location']['lat'],
-        ride.dropoff['location']['lng'],
+        ride.dropoff!.latitude,
+        ride.dropoff!.longitude,
       );
       
       polylines.add(

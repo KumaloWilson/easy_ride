@@ -1,6 +1,7 @@
-import 'package:easy_ride/core/values/constants.dart';
-
 class FareModel {
+  final String rideType;
+  final double distance;
+  final double duration;
   final double baseFare;
   final double distanceFare;
   final double timeFare;
@@ -8,11 +9,11 @@ class FareModel {
   final double discount;
   final double tax;
   final double totalFare;
-  final String rideType;
-  final double distance; // in km
-  final double duration; // in minutes
 
   FareModel({
+    required this.rideType,
+    required this.distance,
+    required this.duration,
     required this.baseFare,
     required this.distanceFare,
     required this.timeFare,
@@ -20,54 +21,28 @@ class FareModel {
     required this.discount,
     required this.tax,
     required this.totalFare,
-    required this.rideType,
-    required this.distance,
-    required this.duration,
   });
 
-  factory FareModel.calculate({
-    required String rideType,
-    required double distance,
-    required double duration,
-    double surgeFactor = 1.0,
-    double discount = 0.0,
-    double taxRate = 0.1, // 10% tax
-  }) {
-    // Get ride type multiplier
-    final rideTypeMultiplier = Constants.rideTypes[rideType] ?? 1.0;
-    
-    // Calculate base components
-    final baseFare = Constants.baseFare * rideTypeMultiplier;
-    final distanceFare = distance * Constants.perKmRate * rideTypeMultiplier;
-    final timeFare = duration * Constants.perMinuteRate * rideTypeMultiplier;
-    
-    // Apply surge pricing
-    final fareBeforeSurge = baseFare + distanceFare + timeFare;
-    final fareWithSurge = fareBeforeSurge * surgeFactor;
-    
-    // Apply discount
-    final fareAfterDiscount = fareWithSurge - discount;
-    
-    // Apply tax
-    final taxAmount = fareAfterDiscount * taxRate;
-    final totalFare = fareAfterDiscount + taxAmount;
-    
+  factory FareModel.fromMap(Map<String, dynamic> map) {
     return FareModel(
-      baseFare: baseFare,
-      distanceFare: distanceFare,
-      timeFare: timeFare,
-      surgeFactor: surgeFactor,
-      discount: discount,
-      tax: taxAmount,
-      totalFare: totalFare,
-      rideType: rideType,
-      distance: distance,
-      duration: duration,
+      rideType: map['rideType'] ?? 'Standard',
+      distance: (map['distance'] ?? 0.0).toDouble(),
+      duration: (map['duration'] ?? 0.0).toDouble(),
+      baseFare: (map['baseFare'] ?? 0.0).toDouble(),
+      distanceFare: (map['distanceFare'] ?? 0.0).toDouble(),
+      timeFare: (map['timeFare'] ?? 0.0).toDouble(),
+      surgeFactor: (map['surgeFactor'] ?? 1.0).toDouble(),
+      discount: (map['discount'] ?? 0.0).toDouble(),
+      tax: (map['tax'] ?? 0.0).toDouble(),
+      totalFare: (map['totalFare'] ?? 0.0).toDouble(),
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
+      'rideType': rideType,
+      'distance': distance,
+      'duration': duration,
       'baseFare': baseFare,
       'distanceFare': distanceFare,
       'timeFare': timeFare,
@@ -75,24 +50,67 @@ class FareModel {
       'discount': discount,
       'tax': tax,
       'totalFare': totalFare,
-      'rideType': rideType,
-      'distance': distance,
-      'duration': duration,
     };
   }
 
-  factory FareModel.fromMap(Map<String, dynamic> map) {
+  static FareModel calculate({
+    required String rideType,
+    required double distance,
+    required double duration,
+    double surgeFactor = 1.0,
+    double discount = 0.0,
+  }) {
+    // Base fare based on ride type
+    double baseFare;
+    double perKmRate;
+    double perMinuteRate;
+
+    switch (rideType) {
+      case 'Premium':
+        baseFare = 5.0;
+        perKmRate = 2.0;
+        perMinuteRate = 0.5;
+        break;
+      case 'XL':
+        baseFare = 7.0;
+        perKmRate = 2.5;
+        perMinuteRate = 0.6;
+        break;
+      case 'Standard':
+      default:
+        baseFare = 2.5;
+        perKmRate = 1.2;
+        perMinuteRate = 0.25;
+        break;
+    }
+
+    // Calculate fare components
+    final distanceFare = distance * perKmRate;
+    final timeFare = duration * perMinuteRate;
+
+    // Apply surge pricing
+    final subtotal = (baseFare + distanceFare + timeFare) * surgeFactor;
+
+    // Apply discount
+    final afterDiscount = subtotal - discount;
+
+    // Calculate tax (assuming 10% tax)
+    final tax = afterDiscount * 0.1;
+
+    // Calculate total
+    final totalFare = afterDiscount + tax;
+
     return FareModel(
-      baseFare: map['baseFare']?.toDouble() ?? 0.0,
-      distanceFare: map['distanceFare']?.toDouble() ?? 0.0,
-      timeFare: map['timeFare']?.toDouble() ?? 0.0,
-      surgeFactor: map['surgeFactor']?.toDouble() ?? 1.0,
-      discount: map['discount']?.toDouble() ?? 0.0,
-      tax: map['tax']?.toDouble() ?? 0.0,
-      totalFare: map['totalFare']?.toDouble() ?? 0.0,
-      rideType: map['rideType'] ?? 'Standard',
-      distance: map['distance']?.toDouble() ?? 0.0,
-      duration: map['duration']?.toDouble() ?? 0.0,
+      rideType: rideType,
+      distance: distance,
+      duration: duration,
+      baseFare: baseFare,
+      distanceFare: distanceFare,
+      timeFare: timeFare,
+      surgeFactor: surgeFactor,
+      discount: discount,
+      tax: tax,
+      totalFare: totalFare,
     );
   }
 }

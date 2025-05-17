@@ -53,7 +53,7 @@ class FareBreakdownCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-
+            
             // Ride type and total
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -83,7 +83,7 @@ class FareBreakdownCard extends StatelessWidget {
                 ),
               ],
             ),
-
+            
             // Ride details
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
@@ -116,7 +116,7 @@ class FareBreakdownCard extends StatelessWidget {
                 ],
               ),
             ),
-
+            
             // Surge indicator
             if (fare.surgeFactor > 1.0)
               Container(
@@ -150,11 +150,11 @@ class FareBreakdownCard extends StatelessWidget {
                   ],
                 ),
               ).animate().fadeIn().slideX(
-                begin: -0.1,
-                end: 0,
-                curve: Curves.easeOutQuart,
-              ),
-
+                    begin: -0.1,
+                    end: 0,
+                    curve: Curves.easeOutQuart,
+                  ),
+            
             // Detailed breakdown
             if (showDetailedBreakdown)
               GestureDetector(
@@ -176,7 +176,7 @@ class FareBreakdownCard extends StatelessWidget {
                   ],
                 ),
               ),
-
+            
             if (isExpanded && showDetailedBreakdown)
               Column(
                 children: [
@@ -223,10 +223,10 @@ class FareBreakdownCard extends StatelessWidget {
                   ),
                 ],
               ).animate().fadeIn().slideY(
-                begin: 0.1,
-                end: 0,
-                curve: Curves.easeOutQuart,
-              ),
+                    begin: 0.1,
+                    end: 0,
+                    curve: Curves.easeOutQuart,
+                  ),
           ],
         ),
       ),
@@ -244,10 +244,10 @@ class FareBreakdownCard extends StatelessWidget {
 
   Widget _buildFareDetailRow(String title, double amount, {bool isHighlighted = false, bool isDiscount = false}) {
     final formattedAmount = isDiscount ? '-\$${amount.abs().toStringAsFixed(2)}' : '\$${amount.toStringAsFixed(2)}';
-    final textColor = isHighlighted
-        ? AppTheme.warningColor
+    final textColor = isHighlighted 
+        ? AppTheme.warningColor 
         : (isDiscount ? AppTheme.successColor : null);
-
+    
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(

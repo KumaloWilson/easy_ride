@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:easy_ride/core/animations/animations.dart';
 
 class AnimatedButton extends StatelessWidget {
   final VoidCallback onPressed;
@@ -15,7 +16,7 @@ class AnimatedButton extends StatelessWidget {
   final bool isDisabled;
 
   const AnimatedButton({
-    super.key,
+    Key? key,
     required this.onPressed,
     required this.child,
     this.backgroundColor,
@@ -27,14 +28,14 @@ class AnimatedButton extends StatelessWidget {
     this.isLoading = false,
     this.isOutlined = false,
     this.isDisabled = false,
-  });
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final bgColor = backgroundColor ??
+    final bgColor = backgroundColor ?? 
         (isOutlined ? Colors.transparent : theme.colorScheme.primary);
-    final fgColor = foregroundColor ??
+    final fgColor = foregroundColor ?? 
         (isOutlined ? theme.colorScheme.primary : Colors.white);
     final radius = borderRadius ?? BorderRadius.circular(12);
 
@@ -45,15 +46,15 @@ class AnimatedButton extends StatelessWidget {
         width: width,
         height: height,
         decoration: BoxDecoration(
-          color: isDisabled
-              ? (isOutlined ? Colors.transparent : Colors.grey.shade300)
+          color: isDisabled 
+              ? (isOutlined ? Colors.transparent : Colors.grey.shade300) 
               : bgColor,
           borderRadius: radius,
-          border: isOutlined
+          border: isOutlined 
               ? Border.all(
-            color: isDisabled ? Colors.grey.shade400 : fgColor,
-            width: 2,
-          )
+                  color: isDisabled ? Colors.grey.shade400 : fgColor,
+                  width: 2,
+                ) 
               : null,
         ),
         child: Center(
@@ -61,35 +62,43 @@ class AnimatedButton extends StatelessWidget {
             padding: padding,
             child: isLoading
                 ? SizedBox(
-              height: 24,
-              width: 24,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(fgColor),
-              ),
-            )
+                    height: 24,
+                    width: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(fgColor),
+                    ),
+                  )
                 : DefaultTextStyle(
-              style: TextStyle(
-                color: isDisabled
-                    ? (isOutlined ? Colors.grey.shade400 : Colors.grey.shade600)
-                    : fgColor,
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
-              child: child,
-            ),
+                    style: TextStyle(
+                      color: isDisabled 
+                          ? (isOutlined ? Colors.grey.shade400 : Colors.grey.shade600) 
+                          : fgColor,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                    child: child,
+                  ),
           ),
         ),
       ).animate(
+        target: isDisabled ? 0 : 1,
         onPlay: (controller) => controller.forward(),
-      ).scaleXY(
-        begin: 1.0,
-        end: isDisabled ? 1.0 : 0.98,
+      ).then(
+        delay: 50.ms,
+
+      ).then(
+
+      ).scale(
+        begin: const Offset(1, 1),
+        end: const Offset(0.98, 0.98),
         duration: 100.ms,
         curve: Curves.easeInOut,
-      ).then(delay: 50.ms).scaleXY(
-        begin: isDisabled ? 1.0 : 0.98,
-        end: 1.0,
+      ).then(
+
+      ).scale(
+        begin: const Offset(0.98, 0.98),
+        end: const Offset(1, 1),
         duration: 100.ms,
         curve: Curves.easeInOut,
       ),

@@ -22,7 +22,7 @@ class EmergencyButton extends StatelessWidget {
     if (isExpanded) {
       return _buildExpandedButton(context);
     }
-
+    
     return _buildCompactButton(context);
   }
 
@@ -37,7 +37,7 @@ class EmergencyButton extends StatelessWidget {
           shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
-              color: isActive
+              color: isActive 
                   ? Colors.red.withOpacity(0.3)
                   : Colors.black.withOpacity(0.1),
               blurRadius: 10,
@@ -51,29 +51,32 @@ class EmergencyButton extends StatelessWidget {
           size: 28,
         ),
       ).animate(
-        autoPlay: isActive, // Only animate when active
-        onComplete: (controller) => controller.repeat(reverse: true), // Use the onComplete callback for repeating
+        target: isActive ? 1 : 0,
       ).scaleXY(
         begin: 1,
         end: 1.1,
         duration: 600.ms,
         curve: Curves.easeInOut,
-      ),
+      ).then(
+
+      ).scaleXY(
+        begin: 1.1,
+        end: 1,
+        duration: 600.ms,
+        curve: Curves.easeInOut,
+      )
     );
   }
 
   Widget _buildExpandedButton(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 400),
+    return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isActive ? Colors.red.shade50 : Colors.white,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: isActive
-                ? Colors.red.withOpacity(0.1)
-                : Colors.black.withOpacity(0.1),
+            color: Colors.black.withOpacity(0.1),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -109,7 +112,7 @@ class EmergencyButton extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      isActive
+                      isActive 
                           ? 'Help is on the way'
                           : 'Tap to activate emergency mode',
                       style: TextStyle(
@@ -157,26 +160,26 @@ class EmergencyButton extends StatelessWidget {
         ],
       ),
     ).animate(
-      autoPlay: isActive,
-    ).shimmer(
-      duration: 1200.ms,
-      color: isActive ? Colors.red.withOpacity(0.3) : Colors.transparent,
-      delay: 300.ms,
-      size: 0.3,
-    ).animate(
-      autoPlay: isActive,
-    ).boxShadow(
-      begin: BoxShadow(
-        color: Colors.red.withOpacity(0.0),
-        blurRadius: 10,
-        spreadRadius: 0,
-      ),
-      end: BoxShadow(
-        color: Colors.red.withOpacity(0.2),
-        blurRadius: 20,
-        spreadRadius: 2,
-      ),
-      duration: 800.ms,
+      target: isActive ? 1 : 0,
+    ).custom(
+      duration: 600.ms,
+      builder: (context, value, child) {
+        final color = Color.lerp(Colors.white, Colors.red.shade50, value)!;
+        return Container(
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.red.withOpacity(0.1 * value),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: child,
+        );
+      },
     );
   }
 }

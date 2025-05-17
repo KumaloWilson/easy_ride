@@ -24,12 +24,14 @@ import 'package:easy_ride/modules/onboarding/bindings/onboarding_binding.dart';
 import 'package:easy_ride/modules/onboarding/views/role_selection_view.dart';
 import 'package:easy_ride/modules/onboarding/views/rider_intro_view.dart';
 import 'package:easy_ride/modules/onboarding/views/driver_intro_view.dart';
+import 'package:easy_ride/modules/auth/views/email_verification_view.dart';
+import 'package:easy_ride/modules/driver/views/driver_verification_view.dart';
 
 part 'app_routes.dart';
 
 class AppPages {
   static const initial = Routes.splash;
-
+  
   static final routes = [
     // Onboarding Routes
     GetPage(
@@ -39,15 +41,15 @@ class AppPages {
     ),
     GetPage(
       name: Routes.riderIntro,
-      page: () => RiderIntroView(),
+      page: () => const RiderIntroView(),
       binding: OnboardingBinding(),
     ),
     GetPage(
       name: Routes.driverIntro,
-      page: () => DriverIntroView(),
+      page: () => const DriverIntroView(),
       binding: OnboardingBinding(),
     ),
-
+    
     // Auth Routes
     GetPage(
       name: Routes.splash,
@@ -69,12 +71,24 @@ class AppPages {
       page: () => const OtpVerificationView(),
       binding: AuthBinding(),
     ),
-    // GetPage(
-    //   name: Routes.userTypeSelection,
-    //   page: () => const UserTypeSelectionView(),
-    //   binding: AuthBinding(),
-    // ),
 
+    GetPage(
+      name: Routes.emailVerification,
+      page: () => const EmailVerificationView(),
+      binding: AuthBinding(),
+    ),
+
+    GetPage(
+      name: Routes.userTypeSelection,
+      page: () => const UserTypeSelectionView(),
+      binding: AuthBinding(),
+    ),
+    GetPage(
+      name: Routes.emailVerification,
+      page: () => const EmailVerificationView(),
+      binding: AuthBinding(),
+    ),
+    
     // Profile Routes
     GetPage(
       name: Routes.profileSetup,
@@ -86,7 +100,7 @@ class AppPages {
       page: () => const ProfileView(),
       binding: ProfileBinding(),
     ),
-
+    
     // Driver Routes
     GetPage(
       name: Routes.driverHome,
@@ -108,6 +122,12 @@ class AppPages {
       page: () => const DriverEarningsView(),
       binding: DriverBinding(),
     ),
+    GetPage(
+      name: Routes.driverVerification,
+      page: () => const DriverVerificationView(),
+      binding: DriverBinding(),
+    ),
+
 
     // Rider Routes
     GetPage(
@@ -122,7 +142,7 @@ class AppPages {
     ),
     GetPage(
       name: Routes.rideDetails,
-      page: () =>  RideDetailsView(),
+      page: () => RideDetailsView(),
       binding: RiderBinding(),
     ),
     GetPage(
@@ -130,7 +150,7 @@ class AppPages {
       page: () => const RideHistoryView(),
       binding: RiderBinding(),
     ),
-
+    
     // Chat Routes
     GetPage(
       name: Routes.chat,

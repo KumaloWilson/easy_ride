@@ -16,7 +16,7 @@ class RoleSelectionView extends GetView<OnboardingController> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 40),
-
+              
               // Header
               Text(
                 'Welcome to Easy Ride',
@@ -28,7 +28,7 @@ class RoleSelectionView extends GetView<OnboardingController> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
-
+              
               const Text(
                 'How would you like to use our app?',
                 style: TextStyle(
@@ -38,7 +38,7 @@ class RoleSelectionView extends GetView<OnboardingController> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 60),
-
+              
               // Role selection cards
               Expanded(
                 child: Row(
@@ -53,7 +53,7 @@ class RoleSelectionView extends GetView<OnboardingController> {
                       ),
                     ),
                     const SizedBox(width: 16),
-
+                    
                     // Driver card
                     Expanded(
                       child: _buildRoleCard(
@@ -66,9 +66,9 @@ class RoleSelectionView extends GetView<OnboardingController> {
                   ],
                 ),
               ),
-
+              
               const SizedBox(height: 40),
-
+              
               // Footer text
               const Text(
                 'You can change your role later in settings',
@@ -84,7 +84,7 @@ class RoleSelectionView extends GetView<OnboardingController> {
       ),
     );
   }
-
+  
   Widget _buildRoleCard({
     required String title,
     required String description,

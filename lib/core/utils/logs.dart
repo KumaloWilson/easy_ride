@@ -22,7 +22,7 @@ class DevLogs {
     }
   }
 
-  static void error(String msg, {dynamic exception}) {
+  static void error(String msg, {dynamic? exception}) {
     if (kDebugMode) {
       _logger.e("$msg $exception");
     }

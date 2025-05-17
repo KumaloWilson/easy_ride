@@ -118,7 +118,7 @@ class DriverProfileCard extends StatelessWidget {
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            '${driver.rating?.toStringAsFixed(1) ?? 'N/A'} (${driver.completedRides} rides)',
+                            '${driver.rating?.toStringAsFixed(1) ?? 'N/A'}',
                             style: TextStyle(
                               color: Colors.grey[600],
                               fontSize: 12,
@@ -179,7 +179,7 @@ class DriverProfileCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Icon(
-                        _getVehicleIcon(driver.vehicleType),
+                        _getVehicleIcon(driver.vehicle.model),
                         color: AppTheme.primaryColor,
                       ),
                     ),
@@ -189,7 +189,7 @@ class DriverProfileCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '${driver.vehicleColor} ${driver.vehicleModel}',
+                            '${driver.vehicle.color} ${driver.vehicle.model}',
                             style: const TextStyle(
                               fontWeight: FontWeight.w500,
                               fontSize: 16,
@@ -197,7 +197,7 @@ class DriverProfileCard extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'License Plate: ${driver.licensePlate}',
+                            'License Plate: ${driver.vehicle.licensePlate}',
                             style: TextStyle(
                               color: Colors.grey[600],
                               fontSize: 14,

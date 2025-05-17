@@ -477,7 +477,7 @@ class DriverRideDetailsView extends GetView<DriverController> {
                           width: double.infinity,
                           child: ElevatedButton.icon(
                             onPressed: () {
-                              controller.updateRideStatus(ride.id, 'arrived');
+                              controller.updateRideStatus('arrived');
                             },
                             icon: const Icon(Icons.location_on),
                             label: const Text('I\'ve Arrived'),
@@ -492,7 +492,7 @@ class DriverRideDetailsView extends GetView<DriverController> {
                           width: double.infinity,
                           child: ElevatedButton.icon(
                             onPressed: () {
-                              controller.updateRideStatus(ride.id, 'started');
+                              controller.updateRideStatus('started');
                             },
                             icon: const Icon(Icons.play_arrow),
                             label: const Text('Start Ride'),
@@ -507,7 +507,7 @@ class DriverRideDetailsView extends GetView<DriverController> {
                           width: double.infinity,
                           child: ElevatedButton.icon(
                             onPressed: () {
-                              controller.updateRideStatus(ride.id, 'completed');
+                              controller.updateRideStatus('completed');
                             },
                             icon: const Icon(Icons.check_circle),
                             label: const Text('Complete Ride'),

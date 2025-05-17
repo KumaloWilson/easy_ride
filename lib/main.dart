@@ -3,7 +3,6 @@ import 'package:get/get.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:easy_ride/routes/app_pages.dart';
 import 'package:easy_ride/core/theme/app_theme.dart';
-import 'package:easy_ride/core/services/services.dart';
 import 'package:easy_ride/core/services/auth_service.dart';
 import 'package:easy_ride/core/services/location_service.dart';
 import 'package:easy_ride/core/services/storage_service.dart';
@@ -17,6 +16,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/services/api_service.dart';
 import 'firebase_options.dart';
+import 'modules/driver/services/voice_navigation_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -54,6 +54,7 @@ Future<void> initServices() async {
   await Get.putAsync(() => StorageService().init());
   await Get.putAsync(() => LocationService().init());
   await Get.putAsync(() => NotificationService().init());
+  await Get.putAsync(() => VoiceNavigationService().init());
   await Get.putAsync(() => FirebaseService().init());
   await Get.putAsync(() => SafetyService().init());
 

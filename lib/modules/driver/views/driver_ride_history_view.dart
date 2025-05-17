@@ -23,7 +23,7 @@ class _DriverRideHistoryViewState extends State<DriverRideHistoryView> with Sing
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    controller.fetchRideHistory();
+    controller.loadRideHistory();
   }
 
   @override

@@ -22,6 +22,9 @@ class LocationService extends GetxService {
   // Stream for location updates
   Stream<LocationData> get locationStream => _location.onLocationChanged;
 
+  // Add this map to store location sharing subscriptions
+  final Map<String, StreamSubscription<LocationData>> _locationSharingSubscriptions = {};
+
   Future<LocationService> init() async {
     _apiService = Get.find<ApiService>();
 
@@ -308,5 +311,75 @@ class LocationService extends GetxService {
         longitude: location.longitude,
       );
     }
+  }
+
+  // Add this method to share driver location in real-time
+  Future<void> shareDriverLocationInRealTime(String rideId, String driverId) async {
+    if (_locationSubscription == null) {
+      DevLogs.error('Location subscription is null');
+      return;
+    }
+
+    DevLogs.debug('Starting real-time location sharing for ride: $rideId');
+
+    // Create a new subscription specifically for sharing location
+    final locationSharingSubscription = _location.onLocationChanged.listen((LocationData locationData) async {
+      if (locationData.latitude == null || locationData.longitude == null) return;
+
+      try {
+        // Update location in the ride document
+        await _firestore.collection('rides').doc(rideId).update({
+          'driverLocation': GeoPoint(locationData.latitude!, locationData.longitude!),
+          'driverHeading': locationData.heading,
+          'driverSpeed': locationData.speed,
+          'driverLocationUpdatedAt': FieldValue.serverTimestamp(),
+        });
+
+        // Also update in a separate collection for better performance
+        await _firestore.collection('rideLocations').doc(rideId).set({
+          'driverId': driverId,
+          'location': GeoPoint(locationData.latitude!, locationData.longitude!),
+          'heading': locationData.heading,
+          'speed': locationData.speed,
+          'accuracy': locationData.accuracy,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+
+        DevLogs.debug('Driver location updated for ride: $rideId');
+      } catch (e) {
+        DevLogs.error('Error updating driver location for ride', exception: e);
+      }
+    });
+
+    // Store the subscription in a map to be able to cancel it later
+    _locationSharingSubscriptions[rideId] = locationSharingSubscription;
+  }
+
+  // Add this method to stop sharing location
+  Future<void> stopSharingDriverLocation(String rideId) async {
+    final subscription = _locationSharingSubscriptions[rideId];
+    if (subscription != null) {
+      await subscription.cancel();
+      _locationSharingSubscriptions.remove(rideId);
+      DevLogs.debug('Stopped sharing driver location for ride: $rideId');
+    }
+  }
+
+  // Add this method to listen for driver location updates
+  Stream<LatLng> listenForDriverLocation(String rideId) {
+    return _firestore
+        .collection('rideLocations')
+        .doc(rideId)
+        .snapshots()
+        .map((snapshot) {
+      if (snapshot.exists) {
+        final data = snapshot.data()!;
+        if (data['location'] != null) {
+          final GeoPoint location = data['location'];
+          return LatLng(location.latitude, location.longitude);
+        }
+      }
+      throw Exception('Driver location not available');
+    });
   }
 }

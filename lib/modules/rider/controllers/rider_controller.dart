@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:get/get.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:easy_ride/core/services/location_service.dart';
@@ -14,7 +15,6 @@ import 'package:easy_ride/modules/rider/models/saved_location_model.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'dart:async';
 import 'dart:ui' as ui;
 import 'package:uuid/uuid.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
@@ -35,14 +35,11 @@ class RiderController extends GetxController {
 
   // Map controller
   Rx<GoogleMapController?> mapController = Rx<GoogleMapController?>(null);
+  Rx<GoogleMapController?> tempMapController = Rx<GoogleMapController?>(null);
 
+  final Rx<UserModel?> userProfile = Rx<UserModel?>(null);
   // User location
   final Rx<LatLng> currentLocation = Rx<LatLng>(const LatLng(0, 0));
-
-
-  // Add a userProfile observable for the sidebar
-  final Rx<UserModel?> userProfile = Rx<UserModel?>(null);
-
 
   // Map state
   final RxDouble mapZoom = 15.0.obs;
@@ -136,6 +133,16 @@ class RiderController extends GetxController {
   // Theme
   final Rx<ThemeMode> themeMode = ThemeMode.system.obs;
 
+  // Nearby drivers
+  final RxList<Map<String, dynamic>> nearbyDrivers = <Map<String, dynamic>>[].obs;
+  final RxBool isLoadingNearbyDrivers = false.obs;
+  final RxSet<Marker> nearbyDriverMarkers = <Marker>{}.obs;
+
+  // Ride start confirmation
+  final RxBool isWaitingForRideStart = false.obs;
+  final RxBool hasRiderConfirmedStart = false.obs;
+  final RxBool hasDriverConfirmedStart = false.obs;
+
   @override
   void onInit() {
     super.onInit();
@@ -153,6 +160,7 @@ class RiderController extends GetxController {
     _rideSubscription?.cancel();
     _driverLocationSubscription?.cancel();
     mapController.value?.dispose();
+    tempMapController.value?.dispose();
     DevLogs.info('RiderController disposed');
     super.onClose();
   }
@@ -393,24 +401,28 @@ class RiderController extends GetxController {
         isRideAccepted.value = true;
         isRideInProgress.value = false;
         isRideCompleted.value = false;
+        isWaitingForRideStart.value = true;
         break;
       case Constants.started:
         isRequestingRide.value = false;
         isRideAccepted.value = true;
         isRideInProgress.value = true;
         isRideCompleted.value = false;
+        isWaitingForRideStart.value = false;
         break;
       case Constants.completed:
         isRequestingRide.value = false;
         isRideAccepted.value = false;
         isRideInProgress.value = false;
         isRideCompleted.value = true;
+        isWaitingForRideStart.value = false;
         break;
       default:
         isRequestingRide.value = false;
         isRideAccepted.value = false;
         isRideInProgress.value = false;
         isRideCompleted.value = false;
+        isWaitingForRideStart.value = false;
         break;
     }
   }
@@ -436,6 +448,13 @@ class RiderController extends GetxController {
         // If ride is accepted, get driver info
         if (ride.status == Constants.accepted && driverInfo.value == null && ride.driverId != null) {
           _getDriverInfo(ride.driverId!);
+        }
+
+        // If driver has arrived, show ride start confirmation
+        if (ride.status == Constants.arrived) {
+          isWaitingForRideStart.value = true;
+          hasDriverConfirmedStart.value = true;
+          hasRiderConfirmedStart.value = false;
         }
 
         // If ride is completed or cancelled, stop listening
@@ -465,7 +484,7 @@ class RiderController extends GetxController {
         final driverData = driverDoc.data()!;
 
         final UserModel user = UserModel.fromMap(userData, driverId);
-        final DriverModel driver = DriverModel.fromMap(driverData, driverId);
+        final DriverModel driver = DriverModel.fromJson(driverData);
 
         driverInfo.value = {
           'user': user,
@@ -486,9 +505,11 @@ class RiderController extends GetxController {
     _driverLocationSubscription?.cancel();
 
     DevLogs.debug('Starting to listen for driver location updates: $driverId');
+
+    // First, try to listen to the dedicated rideLocations collection
     _driverLocationSubscription = _firestore
-        .collection(Constants.driverLocationsCollection)
-        .doc(driverId)
+        .collection('rideLocations')
+        .doc(currentRide.value!.id)
         .snapshots()
         .listen((snapshot) {
       if (snapshot.exists) {
@@ -506,9 +527,38 @@ class RiderController extends GetxController {
             _updateETAToPickup();
           }
 
-          DevLogs.debug('Driver location updated');
+          DevLogs.debug('Driver location updated from rideLocations');
         }
       }
+    }, onError: (e) {
+      // Fallback to the driver_locations collection if there's an error
+      DevLogs.error('Error listening to rideLocations, falling back to driver_locations', exception: e);
+
+      _driverLocationSubscription?.cancel();
+      _driverLocationSubscription = _firestore
+          .collection(Constants.driverLocationsCollection)
+          .doc(driverId)
+          .snapshots()
+          .listen((snapshot) {
+        if (snapshot.exists) {
+          final data = snapshot.data()!;
+
+          if (data['location'] != null) {
+            final GeoPoint location = data['location'];
+            final driverLatLng = LatLng(location.latitude, location.longitude);
+
+            // Update driver marker
+            _updateDriverMarker(driverLatLng);
+
+            // Update ETA
+            if (isRideAccepted.value && !isRideInProgress.value) {
+              _updateETAToPickup();
+            }
+
+            DevLogs.debug('Driver location updated from driver_locations');
+          }
+        }
+      });
     });
   }
 
@@ -894,15 +944,205 @@ class RiderController extends GetxController {
     }
   }
 
-  Future<void> requestRide() async {
-    if (pickupLocation.value == null || dropoffLocation.value == null) return;
-    if (_authService.firebaseUser.value == null) return;
+  // Fetch nearby drivers for the rider to select from
+  Future<void> fetchNearbyDrivers() async {
+    if (pickupLocation.value == null) {
+      Get.snackbar(
+        'Error',
+        'Please set a pickup location first',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
 
-    isRequestingRide.value = true;
-    rideStatus.value = Constants.pending;
-    DevLogs.info('Requesting ride');
+    isLoadingNearbyDrivers.value = true;
+    DevLogs.debug('Fetching nearby drivers');
 
     try {
+      // Get nearby drivers from Firestore
+      final driversSnapshot = await _firestore
+          .collection('driver_locations')
+          .where('isOnline', isEqualTo: true)
+          .where('isBusy', isEqualTo: false)
+          .get();
+
+      final List<Map<String, dynamic>> drivers = [];
+      final Set<Marker> driverMarkers = {};
+
+      for (var doc in driversSnapshot.docs) {
+        final data = doc.data();
+        final driverId = data['driverId'] as String;
+        final location = data['location'] as GeoPoint;
+
+        // Calculate distance to pickup
+        final distance = _calculateDistance(
+          pickupLocation.value!.latitude,
+          pickupLocation.value!.longitude,
+          location.latitude,
+          location.longitude,
+        );
+
+        // Only include drivers within 10km
+        if (distance <= 10.0) {
+          // Get driver details
+          final driverDoc = await _firestore.collection('drivers').doc(driverId).get();
+          final userDoc = await _firestore.collection('users').doc(driverId).get();
+
+          if (driverDoc.exists && userDoc.exists) {
+            final driverData = driverDoc.data()!;
+            final userData = userDoc.data()!;
+
+            final driver = {
+              'id': driverId,
+              'distance': distance,
+              'location': LatLng(location.latitude, location.longitude),
+              'driver': DriverModel.fromJson(driverData),
+              'user': UserModel.fromMap(userData, driverId),
+            };
+
+            drivers.add(driver);
+
+            // Create marker for this driver
+            try {
+              final BitmapDescriptor icon = await _createCustomMarkerBitmap(
+                'assets/images/car_marker.png',
+                size: 120,
+              );
+
+              final marker = Marker(
+                markerId: MarkerId('driver_$driverId'),
+                position: LatLng(location.latitude, location.longitude),
+                icon: icon,
+                infoWindow: InfoWindow(
+                  title: userData['fullName'] ?? 'Driver',
+                  snippet: '${distance.toStringAsFixed(1)} km away',
+                ),
+              );
+
+              driverMarkers.add(marker);
+            } catch (e) {
+              DevLogs.error('Error creating driver marker', exception: e);
+              // Fallback to default marker
+              final marker = Marker(
+                markerId: MarkerId('driver_$driverId'),
+                position: LatLng(location.latitude, location.longitude),
+                icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+                infoWindow: InfoWindow(
+                  title: userData['fullName'] ?? 'Driver',
+                  snippet: '${distance.toStringAsFixed(1)} km away',
+                ),
+              );
+
+              driverMarkers.add(marker);
+            }
+          }
+        }
+      }
+
+      // Sort drivers by distance
+      drivers.sort((a, b) => (a['distance'] as double).compareTo(b['distance'] as double));
+
+      // Update state
+      nearbyDrivers.value = drivers;
+      nearbyDriverMarkers.value = driverMarkers;
+
+      // Add user marker to the map
+      try {
+        final BitmapDescriptor icon = await _createCustomMarkerBitmap(
+          'assets/images/user_marker.png',
+          size: 120,
+        );
+
+        final userMarker = Marker(
+          markerId: const MarkerId('user_pickup_location'),
+          position: LatLng(pickupLocation.value!.latitude, pickupLocation.value!.longitude),
+          icon: icon,
+          infoWindow: const InfoWindow(title: 'Your Pickup Location'),
+        );
+
+        nearbyDriverMarkers.add(userMarker);
+      } catch (e) {
+        DevLogs.error('Error creating user marker', exception: e);
+        // Fallback to default marker
+        final userMarker = Marker(
+          markerId: const MarkerId('user_pickup_location'),
+          position: LatLng(pickupLocation.value!.latitude, pickupLocation.value!.longitude),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+          infoWindow: const InfoWindow(title: 'Your Pickup Location'),
+        );
+
+        nearbyDriverMarkers.add(userMarker);
+      }
+
+      DevLogs.debug('Found ${drivers.length} nearby drivers');
+
+      // Fit map to show all drivers
+      if (tempMapController.value != null && driverMarkers.isNotEmpty) {
+        fitMapToDrivers();
+      }
+    } catch (e) {
+      DevLogs.error('Error fetching nearby drivers', exception: e);
+      Get.snackbar(
+        'Error',
+        'Failed to fetch nearby drivers. Please try again.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } finally {
+      isLoadingNearbyDrivers.value = false;
+    }
+  }
+
+  void fitMapToDrivers() {
+    if (tempMapController.value == null || nearbyDriverMarkers.isEmpty) return;
+
+    try {
+      // Get all marker positions
+      final positions = nearbyDriverMarkers.map((m) => m.position).toList();
+
+      if (positions.isEmpty) return;
+
+      // Calculate bounds
+      double minLat = positions[0].latitude;
+      double maxLat = positions[0].latitude;
+      double minLng = positions[0].longitude;
+      double maxLng = positions[0].longitude;
+
+      for (final pos in positions) {
+        if (pos.latitude < minLat) minLat = pos.latitude;
+        if (pos.latitude > maxLat) maxLat = pos.latitude;
+        if (pos.longitude < minLng) minLng = pos.longitude;
+        if (pos.longitude > maxLng) maxLng = pos.longitude;
+      }
+
+      // Add padding
+      final bounds = LatLngBounds(
+        southwest: LatLng(minLat - 0.02, minLng - 0.02),
+        northeast: LatLng(maxLat + 0.02, maxLng + 0.02),
+      );
+
+      tempMapController.value!.animateCamera(
+        CameraUpdate.newLatLngBounds(bounds, 50),
+      );
+    } catch (e) {
+      DevLogs.error('Error fitting map to drivers', exception: e);
+    }
+  }
+
+  // Select a specific driver for the ride
+  Future<void> selectDriver(Map<String, dynamic> driver) async {
+    if (pickupLocation.value == null || dropoffLocation.value == null) {
+      Get.snackbar(
+        'Error',
+        'Please set pickup and dropoff locations first',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
+    DevLogs.debug('Selecting driver: ${driver['id']}');
+
+    try {
+      // Create a ride request with the selected driver
       final userId = _authService.firebaseUser.value!.uid;
       final rideId = const Uuid().v4();
 
@@ -913,6 +1153,7 @@ class RiderController extends GetxController {
       final ride = RideModel(
         id: rideId,
         riderId: userId,
+        driverId: driver['id'],
         pickup: pickupLocation.value!,
         dropoff: dropoffLocation.value!,
         rideType: selectedRideType.value,
@@ -928,21 +1169,61 @@ class RiderController extends GetxController {
       // Save ride to Firestore
       await _firestore.collection(Constants.ridesCollection).doc(rideId).set(ride.toMap());
 
+      // Create a ride request document
+      await _firestore.collection('rideRequests').doc(rideId).set({
+        'id': rideId,
+        'riderId': userId,
+        'driverId': driver['id'],
+        'pickup': pickupLocation.value!.toMap(),
+        'dropoff': dropoffLocation.value!.toMap(),
+        'rideType': selectedRideType.value,
+        'paymentMethod': selectedPaymentMethod.value,
+        'fare': fareEstimate.value!.totalFare,
+        'distance': distanceToDestination.value,
+        'duration': durationToDestination.value,
+        'status': 'pending',
+        'createdAt': FieldValue.serverTimestamp(),
+        'rideId': rideId,
+      });
+
       // Start listening for ride updates
       _listenForRideUpdates(rideId);
 
       // Save recent location
       _saveRecentLocation(dropoffLocation.value!);
 
-      // Send notifications to nearby drivers
-      await _notificationService.sendRideRequestNotification(rideId, ride.toMap());
+      // Send notification to the selected driver
+      await _notificationService.sendNotificationToUser(
+        driver['id'],
+        'New Ride Request',
+        'You have a new ride request',
+        {
+          'type': 'ride_request',
+          'rideId': rideId,
+        },
+      );
 
-      DevLogs.info('Ride requested successfully: $rideId');
+      // Update UI state
+      isRequestingRide.value = true;
+      rideStatus.value = Constants.pending;
+      currentRide.value = ride;
+
+      // Navigate back to the main screen
+      Get.back();
+
+      // Show a snackbar
+      Get.snackbar(
+        'Ride Requested',
+        'Waiting for driver to accept your request',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 3),
+      );
+
+      DevLogs.info('Ride requested successfully with specific driver: $rideId');
     } catch (e) {
-      DevLogs.error('Error requesting ride', exception: e);
-      isRequestingRide.value = false;
-      rideStatus.value = 'idle';
-
+      DevLogs.error('Error requesting ride with specific driver', exception: e);
       Get.snackbar(
         'Error',
         'Failed to request ride. Please try again.',
@@ -951,6 +1232,17 @@ class RiderController extends GetxController {
         colorText: Colors.white,
       );
     }
+  }
+
+  Future<void> requestRide() async {
+    if (pickupLocation.value == null || dropoffLocation.value == null) return;
+    if (_authService.firebaseUser.value == null) return;
+
+    // Navigate to nearby drivers view
+    Get.toNamed('/rider/nearby-drivers');
+
+    // Fetch nearby drivers
+    await fetchNearbyDrivers();
   }
 
   Future<void> cancelRide() async {
@@ -965,6 +1257,17 @@ class RiderController extends GetxController {
         'cancellationReason': 'Cancelled by rider',
         'updatedAt': FieldValue.serverTimestamp(),
       });
+
+      // Also update the ride request if it exists
+      try {
+        await _firestore.collection('rideRequests').doc(currentRide.value!.id).update({
+          'status': 'cancelled',
+          'cancelledAt': FieldValue.serverTimestamp(),
+          'cancelledBy': 'rider',
+        });
+      } catch (e) {
+        DevLogs.error('Error updating ride request on cancellation', exception: e);
+      }
 
       // If driver was assigned, send cancellation notification
       if (currentRide.value!.driverId != null) {
@@ -1004,6 +1307,9 @@ class RiderController extends GetxController {
     rideStatus.value = 'idle';
     currentRide.value = null;
     driverInfo.value = null;
+    isWaitingForRideStart.value = false;
+    hasRiderConfirmedStart.value = false;
+    hasDriverConfirmedStart.value = false;
 
     // Clear markers and polylines
     final updatedMarkers = {...markers};
@@ -1551,6 +1857,59 @@ class RiderController extends GetxController {
 
     DevLogs.debug('Theme mode toggled to: ${themeMode.value}');
   }
+
+  // Ride start confirmation methods
+  Future<void> confirmRideStart() async {
+    if (currentRide.value == null || !isWaitingForRideStart.value) return;
+
+    try {
+      hasRiderConfirmedStart.value = true;
+
+      // Update ride in Firestore
+      await _firestore.collection(Constants.ridesCollection).doc(currentRide.value!.id).update({
+        'riderConfirmedStart': true,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      // If both rider and driver have confirmed, start the ride
+      if (hasDriverConfirmedStart.value) {
+        await _firestore.collection(Constants.ridesCollection).doc(currentRide.value!.id).update({
+          'status': Constants.started,
+          'startedAt': FieldValue.serverTimestamp(),
+        });
+
+        // Update local state
+        isWaitingForRideStart.value = false;
+        isRideInProgress.value = true;
+        rideStatus.value = Constants.started;
+
+        Get.snackbar(
+          'Ride Started',
+          'Your ride has started. Enjoy your trip!',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.green,
+          colorText: Colors.white,
+        );
+      } else {
+        Get.snackbar(
+          'Start Confirmed',
+          'Waiting for driver to start the ride',
+          snackPosition: SnackPosition.BOTTOM,
+        );
+      }
+
+      DevLogs.debug('Rider confirmed ride start');
+    } catch (e) {
+      DevLogs.error('Error confirming ride start', exception: e);
+      Get.snackbar(
+        'Error',
+        'Failed to confirm ride start. Please try again.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
+  }
 }
 
 extension RiderControllerExtension on RiderController {
@@ -1635,9 +1994,12 @@ extension RiderControllerExtension on RiderController {
     }
   }
 
+  // Add a userProfile observable for the sidebar
+
+
   // Method to load user profile
-  Future<UserModel?> loadUserProfile() async {
-    if (_authService.firebaseUser.value == null) return null;
+  Future<void> loadUserProfile() async {
+    if (_authService.firebaseUser.value == null) return;
 
     try {
       final userId = _authService.firebaseUser.value!.uid;
@@ -1646,13 +2008,9 @@ extension RiderControllerExtension on RiderController {
       if (doc.exists) {
         userProfile.value = UserModel.fromMap(doc.data()!, userId);
         DevLogs.debug('User profile loaded: ${userProfile.value?.fullName}');
-        return userProfile.value;
       }
     } catch (e) {
       DevLogs.error('Error loading user profile', exception: e);
-      return null;
-
     }
-    return null;
   }
 }

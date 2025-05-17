@@ -1,25 +1,24 @@
-import 'package:flutter/material.dart';
-
 enum RideStatus {
-  pending,
   requested,
+  searching,
   accepted,
-  arrived,
+  driverArrived,
   inProgress,
   completed,
-  cancelled
+  cancelled,
+  noDriverFound
 }
 
 extension RideStatusExtension on RideStatus {
   String get displayName {
     switch (this) {
-      case RideStatus.pending:
-        return 'Pending';
       case RideStatus.requested:
         return 'Requested';
+      case RideStatus.searching:
+        return 'Finding Driver';
       case RideStatus.accepted:
-        return 'Accepted';
-      case RideStatus.arrived:
+        return 'Driver Accepted';
+      case RideStatus.driverArrived:
         return 'Driver Arrived';
       case RideStatus.inProgress:
         return 'In Progress';
@@ -27,24 +26,26 @@ extension RideStatusExtension on RideStatus {
         return 'Completed';
       case RideStatus.cancelled:
         return 'Cancelled';
+      case RideStatus.noDriverFound:
+        return 'No Driver Found';
+      default:
+        return 'Unknown';
     }
   }
-  
-  Color get color {
-    switch (this) {
-      case RideStatus.pending:
-      case RideStatus.requested:
-        return Colors.orange;
-      case RideStatus.accepted:
-        return Colors.blue;
-      case RideStatus.arrived:
-        return Colors.teal;
-      case RideStatus.inProgress:
-        return Colors.purple;
-      case RideStatus.completed:
-        return Colors.green;
-      case RideStatus.cancelled:
-        return Colors.red;
-    }
+
+  bool get isActive {
+    return this == RideStatus.requested ||
+        this == RideStatus.searching ||
+        this == RideStatus.accepted ||
+        this == RideStatus.driverArrived ||
+        this == RideStatus.inProgress;
+  }
+
+  bool get isCompleted {
+    return this == RideStatus.completed;
+  }
+
+  bool get isCancelled {
+    return this == RideStatus.cancelled || this == RideStatus.noDriverFound;
   }
 }

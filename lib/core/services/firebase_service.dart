@@ -1,16 +1,16 @@
 import 'package:get/get.dart';
-import 'package:cloud_firestore/cloud_firestore.dart' as firestore;
+import 'package:cloud_firestore/cloud_firestore.dart' as cloudFirestore;
 import 'package:firebase_database/firebase_database.dart';
 
 import '../utils/logs.dart';
 
 class FirebaseService extends GetxService {
-  final firestore.FirebaseFirestore _firestore = firestore.FirebaseFirestore.instance;
+  final cloudFirestore.FirebaseFirestore firestore = cloudFirestore.FirebaseFirestore.instance;
   final FirebaseDatabase _database = FirebaseDatabase.instance;
 
   Future<FirebaseService> init() async {
     // Set persistence for Firestore
-    _firestore.settings.persistenceEnabled;
+    firestore.settings.persistenceEnabled;
 
     // Set persistence for Realtime Database
     _database.setPersistenceEnabled(true);
@@ -19,12 +19,12 @@ class FirebaseService extends GetxService {
   }
 
   // Firestore methods
-  firestore.CollectionReference<Map<String, dynamic>> collection(String path) {
-    return _firestore.collection(path);
+  cloudFirestore.CollectionReference<Map<String, dynamic>> collection(String path) {
+    return firestore.collection(path);
   }
 
-  firestore.DocumentReference<Map<String, dynamic>> document(String path) {
-    return _firestore.doc(path);
+  cloudFirestore.DocumentReference<Map<String, dynamic>> document(String path) {
+    return firestore.doc(path);
   }
 
   Future<void> setData({
@@ -32,25 +32,25 @@ class FirebaseService extends GetxService {
     required Map<String, dynamic> data,
     bool merge = false,
   }) async {
-    final reference = _firestore.doc(path);
-    await reference.set(data, firestore.SetOptions(merge: merge));
+    final reference = firestore.doc(path);
+    await reference.set(data, cloudFirestore.SetOptions(merge: merge));
   }
 
   Future<void> updateData({
     required String path,
     required Map<String, dynamic> data,
   }) async {
-    final reference = _firestore.doc(path);
+    final reference = firestore.doc(path);
     await reference.update(data);
   }
 
   // Get a collection
-  Future<firestore.QuerySnapshot> getCollection({
+  Future<cloudFirestore.QuerySnapshot> getCollection({
     required String path,
-    firestore.Query Function(firestore.Query query)? queryBuilder,
+    cloudFirestore.Query Function(cloudFirestore.Query query)? queryBuilder,
   }) async {
     try {
-      firestore.Query query = _firestore.collection(path);
+      cloudFirestore.Query query = firestore.collection(path);
       if (queryBuilder != null) {
         query = queryBuilder(query);
       }
@@ -63,21 +63,21 @@ class FirebaseService extends GetxService {
   }
 
   Future<void> deleteData({required String path}) async {
-    final reference = _firestore.doc(path);
+    final reference = firestore.doc(path);
     await reference.delete();
   }
 
   Stream<List<T>> collectionStream<T>({
     required String path,
     required T Function(Map<String, dynamic> data, String documentId) builder,
-    firestore.Query<Map<String, dynamic>> Function(firestore.Query<Map<String, dynamic>> query)? queryBuilder,
+    cloudFirestore.Query<Map<String, dynamic>> Function(cloudFirestore.Query<Map<String, dynamic>> query)? queryBuilder,
     int Function(T lhs, T rhs)? sort,
   }) {
-    firestore.Query<Map<String, dynamic>> query = _firestore.collection(path);
+    cloudFirestore.Query<Map<String, dynamic>> query = firestore.collection(path);
     if (queryBuilder != null) {
       query = queryBuilder(query);
     }
-    final Stream<firestore.QuerySnapshot<Map<String, dynamic>>> snapshots = query.snapshots();
+    final Stream<cloudFirestore.QuerySnapshot<Map<String, dynamic>>> snapshots = query.snapshots();
     return snapshots.map((snapshot) {
       final result = snapshot.docs
           .map((snapshot) => builder(snapshot.data(), snapshot.id))
@@ -93,8 +93,8 @@ class FirebaseService extends GetxService {
     required String path,
     required T Function(Map<String, dynamic>? data, String documentID) builder,
   }) {
-    final firestore.DocumentReference<Map<String, dynamic>> reference = _firestore.doc(path);
-    final Stream<firestore.DocumentSnapshot<Map<String, dynamic>>> snapshots = reference.snapshots();
+    final cloudFirestore.DocumentReference<Map<String, dynamic>> reference = firestore.doc(path);
+    final Stream<cloudFirestore.DocumentSnapshot<Map<String, dynamic>>> snapshots = reference.snapshots();
     return snapshots.map((snapshot) => builder(snapshot.data(), snapshot.id));
   }
 
@@ -112,10 +112,10 @@ class FirebaseService extends GetxService {
   }
 
   // Get a document
-  Future<firestore.DocumentSnapshot> getDocument({required String path}) async {
+  Future<cloudFirestore.DocumentSnapshot> getDocument({required String path}) async {
     try {
       DevLogs.debug('Getting document at path: $path');
-      return await _firestore.doc(path).get();
+      return await firestore.doc(path).get();
     } catch (e) {
       DevLogs.error('Error getting document', exception: e);
       throw e;

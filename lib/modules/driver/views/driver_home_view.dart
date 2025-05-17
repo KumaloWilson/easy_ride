@@ -6,13 +6,15 @@ import 'package:easy_ride/core/theme/app_theme.dart';
 import 'package:easy_ride/routes/app_pages.dart';
 import 'package:easy_ride/core/utils/logs.dart';
 import 'package:easy_ride/core/widgets/animated_button.dart';
-//import 'package:easy_ride/core/animations/animations.dart';
+import 'package:easy_ride/core/animations/animations.dart';
 import 'package:easy_ride/core/values/constants.dart';
+import 'package:easy_ride/modules/driver/widgets/ride_request_modal.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
-import '../../../core/widgets/animated_card.dart';
+import '../models/driver.dart';
 
 class DriverHomeView extends GetView<DriverController> {
-  const DriverHomeView({super.key});
+  const DriverHomeView({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -23,6 +25,13 @@ class DriverHomeView extends GetView<DriverController> {
   }
 
   Widget _buildBody() {
+    // Show ride request modal if there's an incoming request
+    if (controller.hasIncomingRequest.value && !controller.isRideAccepted.value) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showRideRequestModal();
+      });
+    }
+
     switch (controller.selectedNavIndex.value) {
       case 0:
         return _buildMapView();
@@ -35,6 +44,24 @@ class DriverHomeView extends GetView<DriverController> {
       default:
         return _buildMapView();
     }
+  }
+
+  // Add this method to show the ride request modal
+  void _showRideRequestModal() {
+    if (controller.incomingRideRequest.isEmpty) return;
+
+    // Check if modal is already showing
+    if (Get.isBottomSheetOpen ?? false) return;
+
+    Get.bottomSheet(
+      RideRequestModal(
+        controller: controller,
+        rideRequest: controller.incomingRideRequest,
+      ),
+      isDismissible: false,
+      enableDrag: false,
+      isScrollControlled: true,
+    );
   }
 
   Widget _buildMapView() {
@@ -50,10 +77,10 @@ class DriverHomeView extends GetView<DriverController> {
           zoomControlsEnabled: false,
           markers: controller.markers,
           polylines: controller.polylines,
-          mapType: controller.mapType.value,
+          mapType: controller.mapType.value == 'normal' ? MapType.normal : MapType.satellite,
           trafficEnabled: controller.showTraffic.value,
           circles: controller.circles,
-          onMapCreated: controller.onMapCreated,
+          onMapCreated: controller.setMapController,
           onCameraMove: (position) {
             controller.mapZoom.value = position.zoom;
           },
@@ -65,39 +92,7 @@ class DriverHomeView extends GetView<DriverController> {
         )),
 
         // App Bar
-        Positioned(
-          top: Get.mediaQuery.padding.top,
-          left: 0,
-          right: 0,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  backgroundColor: Colors.white,
-                  child: IconButton(
-                    icon: const Icon(Icons.menu),
-                    color: AppTheme.primaryColor,
-                    onPressed: () {
-                      _showMenuOptions();
-                    },
-                  ),
-                ),
-                const Spacer(),
-                CircleAvatar(
-                  backgroundColor: Colors.white,
-                  child: IconButton(
-                    icon: const Icon(Icons.person),
-                    color: AppTheme.primaryColor,
-                    onPressed: () {
-                      controller.setNavIndex(3);
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+        _buildTopBar(Get.context!),
 
         // Online/Offline Toggle
         Positioned(
@@ -122,24 +117,40 @@ class DriverHomeView extends GetView<DriverController> {
                 children: [
                   Icon(
                     Icons.circle,
-                    color: controller.isOnline.value ? Colors.green : Colors.red,
+                    color: controller.driverStatus.value == DriverStatus.online
+                        ? Colors.green
+                        : controller.driverStatus.value == DriverStatus.busy
+                        ? Colors.orange
+                        : Colors.red,
                     size: 12,
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    controller.isOnline.value ? 'You are Online' : 'You are Offline',
+                    controller.driverStatus.value == DriverStatus.online
+                        ? 'You are Online'
+                        : controller.driverStatus.value == DriverStatus.busy
+                        ? 'You are Busy'
+                        : 'You are Offline',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      color: controller.isOnline.value ? Colors.green : Colors.red,
+                      color: controller.driverStatus.value == DriverStatus.online
+                          ? Colors.green
+                          : controller.driverStatus.value == DriverStatus.busy
+                          ? Colors.orange
+                          : Colors.red,
                     ),
                   ),
                   const Spacer(),
                   Switch(
-                    value: controller.isOnline.value,
-                    onChanged: (value) {
+                    value: controller.driverStatus.value != DriverStatus.offline,
+                    onChanged: controller.driverStatus.value == DriverStatus.busy
+                        ? null  // Disable toggle when busy
+                        : (value) {
                       controller.toggleOnlineStatus();
                     },
-                    activeColor: Colors.green,
+                    activeColor: controller.driverStatus.value == DriverStatus.busy
+                        ? Colors.orange
+                        : Colors.green,
                   ),
                 ],
               ),
@@ -225,7 +236,7 @@ class DriverHomeView extends GetView<DriverController> {
         ),
 
         // Current Ride Card (if any)
-        Obx(() => controller.currentRide.value != null
+        Obx(() => controller.currentRide.isNotEmpty
             ? Positioned(
           bottom: 24,
           left: 16,
@@ -234,7 +245,7 @@ class DriverHomeView extends GetView<DriverController> {
             onTap: () {
               Get.toNamed(
                 Routes.driverRideDetails,
-                arguments: controller.currentRide.value!.id,
+                arguments: controller.currentRide['id'],
               );
             },
             child: AnimatedCard(
@@ -281,9 +292,9 @@ class DriverHomeView extends GetView<DriverController> {
                                 ),
                               ),
                               Text(
-                                _getRideStatusText(controller.currentRide.value!.status),
+                                _getRideStatusText(controller.currentRide['status']),
                                 style: TextStyle(
-                                  color: _getRideStatusColor(controller.currentRide.value!.status),
+                                  color: _getRideStatusColor(controller.currentRide['status']),
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
@@ -316,7 +327,7 @@ class DriverHomeView extends GetView<DriverController> {
                                   const SizedBox(width: 4),
                                   Expanded(
                                     child: Text(
-                                      controller.currentRide.value!.pickup!.name,
+                                      controller.currentRide['pickup']?['name'] ?? 'Pickup Location',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
@@ -337,7 +348,7 @@ class DriverHomeView extends GetView<DriverController> {
                                   const SizedBox(width: 4),
                                   Expanded(
                                     child: Text(
-                                      controller.currentRide.value!.dropoff!.name,
+                                      controller.currentRide['dropoff']?['name'] ?? 'Dropoff Location',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
@@ -355,14 +366,14 @@ class DriverHomeView extends GetView<DriverController> {
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Text(
-                              '\$${controller.currentRide.value!.fare.toStringAsFixed(2)}',
+                              '\$${(controller.currentRide['fare'] ?? 0.0).toStringAsFixed(2)}',
                               style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 18,
                               ),
                             ),
                             Text(
-                              controller.currentRide.value!.rideType,
+                              controller.currentRide['rideType'] ?? 'Standard',
                               style: TextStyle(
                                 color: Colors.grey[600],
                               ),
@@ -377,7 +388,7 @@ class DriverHomeView extends GetView<DriverController> {
                         Expanded(
                           child: OutlinedButton(
                             onPressed: () {
-                              if (controller.riderInfo.value != null) {
+                              if (controller.riderInfo.isNotEmpty) {
                                 controller.callRider();
                               }
                             },
@@ -396,7 +407,7 @@ class DriverHomeView extends GetView<DriverController> {
                         ),
                         const SizedBox(width: 16),
                         Expanded(
-                          child: _buildActionButton(controller.currentRide.value!.status),
+                          child: _buildActionButton(controller.currentRide['status']),
                         ),
                       ],
                     ),
@@ -406,7 +417,7 @@ class DriverHomeView extends GetView<DriverController> {
             ),
           ),
         )
-            : controller.isOnline.value && controller.incomingRideRequest.value != null && !controller.isRideAccepted.value
+            : controller.isOnline.value && controller.incomingRideRequest.isNotEmpty && !controller.isRideAccepted.value
             ? Positioned(
           bottom: 24,
           left: 16,
@@ -446,7 +457,7 @@ class DriverHomeView extends GetView<DriverController> {
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              '${controller.requestTimeRemaining.value}s',
+                              '${controller.requestTimeRemaining.value.toInt()}s',
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold,
@@ -457,7 +468,7 @@ class DriverHomeView extends GetView<DriverController> {
                       ),
                       const Spacer(),
                       Text(
-                        '\$${controller.incomingRideRequest.value!.fare.toStringAsFixed(2)}',
+                        '\$${(controller.incomingRideRequest['fare'] ?? 0.0).toStringAsFixed(2)}',
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 18,
@@ -490,7 +501,7 @@ class DriverHomeView extends GetView<DriverController> {
                                 const SizedBox(width: 4),
                                 Expanded(
                                   child: Text(
-                                    controller.incomingRideRequest.value!.pickup!.name,
+                                    controller.incomingRideRequest['pickup']?['name'] ?? 'Pickup Location',
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
@@ -511,7 +522,7 @@ class DriverHomeView extends GetView<DriverController> {
                                 const SizedBox(width: 4),
                                 Expanded(
                                   child: Text(
-                                    controller.incomingRideRequest.value!.dropoff!.name,
+                                    controller.incomingRideRequest['dropoff']?['name'] ?? 'Dropoff Location',
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
@@ -537,7 +548,7 @@ class DriverHomeView extends GetView<DriverController> {
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                '${controller.incomingRideRequest.value!.distance.toStringAsFixed(1)} km',
+                                '${(controller.incomingRideRequest['distance'] ?? 0.0).toStringAsFixed(1)} km',
                                 style: TextStyle(
                                   color: Colors.grey[600],
                                 ),
@@ -546,7 +557,7 @@ class DriverHomeView extends GetView<DriverController> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            controller.incomingRideRequest.value!.rideType,
+                            controller.incomingRideRequest['rideType'] ?? 'Standard',
                             style: TextStyle(
                               color: Colors.grey[600],
                             ),
@@ -562,7 +573,7 @@ class DriverHomeView extends GetView<DriverController> {
                     children: [
                       Expanded(
                         child: OutlinedButton(
-                          onPressed: controller.declineRideRequest,
+                          onPressed: controller.rejectRideRequest,
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
@@ -635,7 +646,7 @@ class DriverHomeView extends GetView<DriverController> {
 
         // Map Controls
         Positioned(
-          bottom: controller.currentRide.value != null ? 100 : 90,
+          bottom: controller.currentRide.isNotEmpty ? 100 : 90,
           right: 16,
           child: Column(
             children: [
@@ -665,7 +676,9 @@ class DriverHomeView extends GetView<DriverController> {
                 child: IconButton(
                   icon: const Icon(Icons.traffic),
                   color: controller.showTraffic.value ? AppTheme.primaryColor : Colors.grey,
-                  onPressed: controller.toggleTraffic,
+                  onPressed: () {
+                    controller.showTraffic.value = !controller.showTraffic.value;
+                  },
                 ),
               ),
             ],
@@ -706,8 +719,7 @@ class DriverHomeView extends GetView<DriverController> {
                 itemBuilder: (context, index) {
                   final ride = controller.rideHistory[index];
                   return AnimatedCard(
-
-                    // delay: Duration(milliseconds: 100 * index),
+                    delay: Duration(milliseconds: 100 * index),
                     child: Card(
                       margin: const EdgeInsets.only(bottom: 16),
                       shape: RoundedRectangleBorder(
@@ -913,7 +925,7 @@ class DriverHomeView extends GetView<DriverController> {
                       itemBuilder: (context, index) {
                         final ride = completedRides[index];
                         return AnimatedCard(
-                          // delay: Duration(milliseconds: 100 * index),
+                          delay: Duration(milliseconds: 100 * index),
                           child: Card(
                             margin: const EdgeInsets.only(bottom: 12),
                             shape: RoundedRectangleBorder(
@@ -1008,14 +1020,14 @@ class DriverHomeView extends GetView<DriverController> {
                     child: Column(
                       children: [
                         Obx(() {
-                          final user = controller.authService.currentUser.value;
+                          final user = FirebaseAuth.instance.currentUser;
                           return CircleAvatar(
                             radius: 50,
                             backgroundColor: AppTheme.primaryColor,
-                            backgroundImage: user?.profileImageUrl != null
-                                ? NetworkImage(user!.profileImageUrl!)
+                            backgroundImage: user?.photoURL != null
+                                ? NetworkImage(user!.photoURL!)
                                 : null,
-                            child: user?.profileImageUrl == null
+                            child: user?.photoURL == null
                                 ? const Icon(
                               Icons.person,
                               size: 50,
@@ -1026,7 +1038,7 @@ class DriverHomeView extends GetView<DriverController> {
                         }),
                         const SizedBox(height: 16),
                         Obx(() => Text(
-                          controller.authService.currentUser.value?.fullName ?? 'Driver',
+                          controller.currentUser.value?.fullName ?? 'Driver',
                           style: const TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
@@ -1034,7 +1046,7 @@ class DriverHomeView extends GetView<DriverController> {
                         )),
                         const SizedBox(height: 4),
                         Obx(() => Text(
-                          controller.authService.currentUser.value?.email ?? '',
+                          controller.currentUser.value?.email ?? '',
                           style: TextStyle(
                             color: Colors.grey[600],
                           ),
@@ -1146,7 +1158,6 @@ class DriverHomeView extends GetView<DriverController> {
                       onPressed: () {
                         _confirmLogout();
                       },
-
                       backgroundColor: Colors.red,
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -1190,31 +1201,39 @@ class DriverHomeView extends GetView<DriverController> {
 
   Widget _buildActionButton(String status) {
     switch (status) {
-      case Constants.accepted:
+      case 'accepted':
         return AnimatedButton(
           onPressed: controller.arrivedAtPickup,
           backgroundColor: Colors.orange,
           child: const Text('Arrived at Pickup'),
         );
-      case Constants.arrived:
+      case 'arrived':
         return AnimatedButton(
           onPressed: controller.startRide,
           backgroundColor: Colors.green,
           child: const Text('Start Ride'),
         );
-      case Constants.started:
+      case 'started':
         return AnimatedButton(
           onPressed: controller.completeRide,
           child: const Text('Complete Ride'),
         );
       default:
         return AnimatedButton(
-          onPressed: (){
+          onPressed: () {
             Get.showSnackbar(
-              const GetSnackBar(
-                title: 'Loading',
-                message: 'Please Wait',
-                duration: Duration(seconds: 2),
+              GetSnackBar(
+                message: "Loading...",
+                duration: const Duration(seconds: 2),
+                snackPosition: SnackPosition.BOTTOM,
+                backgroundColor: Colors.grey.shade800,
+                borderRadius: 10,
+                margin: const EdgeInsets.all(10),
+                isDismissible: true,
+                icon: const Icon(
+                  Icons.info_outline,
+                  color: Colors.white,
+                ),
               ),
             );
           },
@@ -1477,17 +1496,17 @@ class DriverHomeView extends GetView<DriverController> {
 
   Color _getRideStatusColor(String status) {
     switch (status) {
-      case Constants.pending:
+      case 'pending':
         return Colors.blue;
-      case Constants.accepted:
+      case 'accepted':
         return Colors.orange;
-      case Constants.arrived:
+      case 'arrived':
         return Colors.purple;
-      case Constants.started:
+      case 'started':
         return Colors.green;
-      case Constants.completed:
+      case 'completed':
         return Colors.teal;
-      case Constants.cancelled:
+      case 'cancelled':
         return Colors.red;
       default:
         return Colors.grey;
@@ -1496,17 +1515,17 @@ class DriverHomeView extends GetView<DriverController> {
 
   String _getRideStatusText(String status) {
     switch (status) {
-      case Constants.pending:
+      case 'pending':
         return 'Pending';
-      case Constants.accepted:
+      case 'accepted':
         return 'On the way';
-      case Constants.arrived:
+      case 'arrived':
         return 'At pickup';
-      case Constants.started:
+      case 'started':
         return 'In progress';
-      case Constants.completed:
+      case 'completed':
         return 'Completed';
-      case Constants.cancelled:
+      case 'cancelled':
         return 'Cancelled';
       default:
         return 'Unknown';
@@ -1538,6 +1557,106 @@ class DriverHomeView extends GetView<DriverController> {
           label: 'Profile',
         ),
       ],
+    );
+  }
+
+  // Update the _buildTopBar method to show driver status
+  Widget _buildTopBar(BuildContext context) {
+    return Positioned(
+      top: 16,
+      left: 16,
+      right: 16,
+      child: Row(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(30),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 10,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.menu),
+              color: AppTheme.primaryColor,
+              onPressed: () {
+                _showMenuOptions();
+              },
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Obx(() {
+              Color statusColor;
+              String statusText;
+
+              switch (controller.driverStatus.value) {
+                case DriverStatus.online:
+                  statusColor = Colors.green;
+                  statusText = 'Online';
+                  break;
+                case DriverStatus.busy:
+                  statusColor = Colors.orange;
+                  statusText = 'Busy';
+                  break;
+                case DriverStatus.offline:
+                default:
+                  statusColor = Colors.red;
+                  statusText = 'Offline';
+                  break;
+              }
+
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(30),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 10,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.circle,
+                      color: statusColor,
+                      size: 12,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      statusText,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: statusColor,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ),
+          const SizedBox(width: 16),
+          CircleAvatar(
+            backgroundColor: Colors.white,
+            child: IconButton(
+              icon: const Icon(Icons.person),
+              color: AppTheme.primaryColor,
+              onPressed: () {
+                controller.setNavIndex(3);
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

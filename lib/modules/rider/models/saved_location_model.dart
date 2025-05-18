@@ -1,4 +1,3 @@
-
 import '../../../models/location_model.dart';
 
 class SavedLocationModel {

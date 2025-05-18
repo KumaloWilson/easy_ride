@@ -25,6 +25,10 @@ import '../../../core/theme/app_theme.dart';
 import '../models/driver.dart';
 import 'package:easy_ride/routes/app_pages.dart';
 import 'package:easy_ride/models/vehicle_model.dart';
+import 'package:location/location.dart' as loc;
+import 'package:easy_ride/models/ride_status.dart';
+import 'package:easy_ride/modules/driver/models/earnings_model.dart';
+import 'package:easy_ride/modules/driver/widgets/ride_request_modal.dart';
 
 enum VerificationStatus {
   pending,
@@ -914,47 +918,69 @@ class DriverController extends GetxController {
     _rideRequestTimer?.cancel();
 
     try {
+      final user = _auth.currentUser;
+      if (user == null) return;
+
       String requestId;
+      String rideId;
       String riderId;
 
       // Handle both types of ride requests
       if (pendingRideRequest.value != null) {
         requestId = pendingRideRequest.value!.id;
+        rideId = requestId; // In this case, they're the same
         riderId = pendingRideRequest.value!.riderId;
-
-        // Update ride request status
-        await _firestore.collection('rideRequests').doc(requestId).update({
-          'status': 'searching',
-          'driverId': null,
-        });
-
-        // Notify rider
-        await _sendNotification(
-          riderId,
-          'Driver Unavailable',
-          'The driver is not available. Finding another driver...',
-          {
-            'type': 'driver_rejected',
-            'rideId': requestId,
-          },
-        );
       } else {
-        // Just ignore the request, don't update it
         requestId = incomingRideRequest['id'];
+        rideId = incomingRideRequest['rideId'] ?? requestId;
+        riderId = incomingRideRequest['riderId'];
       }
 
-      // Clear state
+      // Update the request status to rejected
+      await _firestore.collection('rideRequests').doc(requestId).update({
+        'status': 'rejected',
+        'driverId': user.uid,
+        'rejectedAt': FieldValue.serverTimestamp(),
+      });
+
+      // Update the ride with driver info
+      await _firestore.collection('rides').doc(rideId).update({
+        'status': 'rejected',
+        'driverId': user.uid,
+        'rejectedAt': FieldValue.serverTimestamp(),
+      });
+
+      // Send notification to rider about rejection
+      await _sendNotification(
+        riderId,
+        'Ride Rejected',
+        'A driver has rejected your ride request',
+        {
+          'type': 'ride_rejected',
+          'rideId': rideId,
+        },
+      );
+
+      // Reset request state
       hasIncomingRequest.value = false;
       incomingRideRequest.clear();
       pendingRideRequest.value = null;
       showRideRequestModal.value = false;
-      circles.clear();
 
-      DevLogs.debug('Declined ride request: $requestId');
+      // No need to update driver status to offline as that should be a separate decision
+      // The driver might want to remain online to receive other requests
+
+      DevLogs.info('Ride request rejected successfully');
     } catch (e) {
       DevLogs.error('Error rejecting ride request', exception: e);
+      Get.snackbar(
+        'Error',
+        'Failed to reject ride request',
+        snackPosition: SnackPosition.BOTTOM,
+      );
     }
   }
+
 
   void declineRideRequest() {
     rejectRideRequest();

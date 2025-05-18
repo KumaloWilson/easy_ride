@@ -7,7 +7,12 @@ class ChatMessage {
   final String rideId;
   final String message;
   final DateTime timestamp;
-  final bool isRead;
+  bool isRead;
+  final String? imageUrl;
+  final double? latitude;
+  final double? longitude;
+  final String messageType;
+  final DateTime? deliveredAt;
   
   ChatMessage({
     required this.id,
@@ -17,17 +22,35 @@ class ChatMessage {
     required this.message,
     required this.timestamp,
     this.isRead = false,
+    this.imageUrl,
+    this.latitude,
+    this.longitude,
+    this.messageType = 'text',
+    this.deliveredAt,
   });
   
-  factory ChatMessage.fromMap(Map<String, dynamic> map, String id) {
+  factory ChatMessage.fromMap(Map<String, dynamic> data, String id) {
     return ChatMessage(
       id: id,
-      senderId: map['senderId'] ?? '',
-      receiverId: map['receiverId'] ?? '',
-      rideId: map['rideId'] ?? '',
-      message: map['message'] ?? '',
-      timestamp: (map['timestamp'] as Timestamp).toDate(),
-      isRead: map['isRead'] ?? false,
+      senderId: data['senderId'] ?? '',
+      receiverId: data['receiverId'] ?? '',
+      rideId: data['rideId'] ?? '',
+      message: data['message'] ?? '',
+      timestamp: data['timestamp'] != null
+          ? (data['timestamp'] is Timestamp
+              ? (data['timestamp'] as Timestamp).toDate()
+              : DateTime.parse(data['timestamp'].toString()))
+          : DateTime.now(),
+      isRead: data['isRead'] ?? false,
+      imageUrl: data['imageUrl'],
+      latitude: data['latitude'],
+      longitude: data['longitude'],
+      messageType: data['messageType'] ?? 'text',
+      deliveredAt: data['deliveredAt'] != null
+          ? (data['deliveredAt'] is Timestamp
+              ? (data['deliveredAt'] as Timestamp).toDate()
+              : DateTime.parse(data['deliveredAt'].toString()))
+          : null,
     );
   }
   
@@ -37,8 +60,13 @@ class ChatMessage {
       'receiverId': receiverId,
       'rideId': rideId,
       'message': message,
-      'timestamp': Timestamp.fromDate(timestamp),
+      'timestamp': timestamp,
       'isRead': isRead,
+      'imageUrl': imageUrl,
+      'latitude': latitude,
+      'longitude': longitude,
+      'messageType': messageType,
+      'deliveredAt': deliveredAt,
     };
   }
   
@@ -59,6 +87,11 @@ class ChatMessage {
       message: message ?? this.message,
       timestamp: timestamp ?? this.timestamp,
       isRead: isRead ?? this.isRead,
+      imageUrl: imageUrl ?? this.imageUrl,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      messageType: messageType ?? this.messageType,
+      deliveredAt: deliveredAt ?? this.deliveredAt,
     );
   }
 }

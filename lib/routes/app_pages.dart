@@ -26,6 +26,9 @@ import 'package:easy_ride/modules/onboarding/views/rider_intro_view.dart';
 import 'package:easy_ride/modules/onboarding/views/driver_intro_view.dart';
 import 'package:easy_ride/modules/auth/views/email_verification_view.dart';
 import 'package:easy_ride/modules/driver/views/driver_verification_view.dart';
+import 'package:easy_ride/modules/chat/views/enhanced_chat_view.dart';
+import 'package:easy_ride/modules/rider/views/enhanced_ride_history_view.dart';
+import 'package:easy_ride/modules/profile/views/enhanced_profile_view.dart';
 
 part 'app_routes.dart';
 
@@ -100,11 +103,17 @@ class AppPages {
       page: () => const ProfileView(),
       binding: ProfileBinding(),
     ),
+
+    GetPage(
+      name: '/enhanced-profile',
+      page: () => const EnhancedProfileView(),
+      binding: ProfileBinding(),
+    ),
     
     // Driver Routes
     GetPage(
       name: Routes.driverHome,
-      page: () => const DriverHomeView(),
+      page: () => DriverHomeView(),
       binding: DriverBinding(),
     ),
     GetPage(
@@ -150,11 +159,21 @@ class AppPages {
       page: () => const RideHistoryView(),
       binding: RiderBinding(),
     ),
+    GetPage(
+      name: '/enhanced-ride-history',
+      page: () => const EnhancedRideHistoryView(),
+      binding: RiderBinding(),
+    ),
     
     // Chat Routes
     GetPage(
       name: Routes.chat,
       page: () => const ChatView(),
+      binding: ChatBinding(),
+    ),
+    GetPage(
+      name: '/enhanced-chat',
+      page: () => const EnhancedChatView(),
       binding: ChatBinding(),
     ),
   ];

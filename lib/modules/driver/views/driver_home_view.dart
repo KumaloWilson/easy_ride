@@ -12,13 +12,20 @@ import 'package:easy_ride/modules/driver/widgets/ride_request_modal.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../models/driver.dart';
+import '../widgets/driver_sidebar.dart';
 
 class DriverHomeView extends GetView<DriverController> {
-  const DriverHomeView({Key? key}) : super(key: key);
+  const DriverHomeView({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('Driver Home'),
+        elevation: 0,
+
+      ),
+      drawer: DriverDrawer(controller: controller),
       body: Obx(() => _buildBody()),
       bottomNavigationBar: _buildBottomNavBar(),
     );
@@ -113,12 +120,9 @@ class DriverHomeView extends GetView<DriverController> {
           );
         }),
 
-        // App Bar
-        _buildTopBar(Get.context!),
-
         // Online/Offline Toggle
         Positioned(
-          top: Get.mediaQuery.padding.top + 70,
+          top: Get.mediaQuery.padding.top + 10,
           left: 16,
           right: 16,
           child: Obx(() => AnimatedCard(
@@ -1264,99 +1268,99 @@ class DriverHomeView extends GetView<DriverController> {
     }
   }
 
-  void _showMenuOptions() {
-    Get.bottomSheet(
-      Container(
-        padding: const EdgeInsets.symmetric(vertical: 20),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(20),
-            topRight: Radius.circular(20),
-          ),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 5,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            const SizedBox(height: 20),
-            ListTile(
-              leading: const Icon(Icons.home),
-              title: const Text('Home'),
-              onTap: () {
-                Get.back();
-                controller.setNavIndex(0);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.history),
-              title: const Text('Ride History'),
-              onTap: () {
-                Get.back();
-                controller.setNavIndex(1);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.account_balance_wallet),
-              title: const Text('Earnings'),
-              onTap: () {
-                Get.back();
-                controller.setNavIndex(2);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.description),
-              title: const Text('Documents'),
-              onTap: () {
-                Get.back();
-                Get.toNamed(Routes.driverDocumentUpload);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.person),
-              title: const Text('Profile'),
-              onTap: () {
-                Get.back();
-                controller.setNavIndex(3);
-              },
-            ),
-            const Divider(),
-            ListTile(
-              leading: const Icon(Icons.help),
-              title: const Text('Help & Support'),
-              onTap: () {
-                Get.back();
-                _showHelpSupportDialog();
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.info),
-              title: const Text('About'),
-              onTap: () {
-                Get.back();
-                _showAboutDialog();
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.logout),
-              title: const Text('Logout'),
-              onTap: () {
-                Get.back();
-                _confirmLogout();
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  // void _showMenuOptions() {
+  //   Get.bottomSheet(
+  //     Container(
+  //       padding: const EdgeInsets.symmetric(vertical: 20),
+  //       decoration: const BoxDecoration(
+  //         color: Colors.white,
+  //         borderRadius: BorderRadius.only(
+  //           topLeft: Radius.circular(20),
+  //           topRight: Radius.circular(20),
+  //         ),
+  //       ),
+  //       child: Column(
+  //         mainAxisSize: MainAxisSize.min,
+  //         children: [
+  //           Container(
+  //             width: 40,
+  //             height: 5,
+  //             decoration: BoxDecoration(
+  //               color: Colors.grey[300],
+  //               borderRadius: BorderRadius.circular(10),
+  //             ),
+  //           ),
+  //           const SizedBox(height: 20),
+  //           ListTile(
+  //             leading: const Icon(Icons.home),
+  //             title: const Text('Home'),
+  //             onTap: () {
+  //               Get.back();
+  //               controller.setNavIndex(0);
+  //             },
+  //           ),
+  //           ListTile(
+  //             leading: const Icon(Icons.history),
+  //             title: const Text('Ride History'),
+  //             onTap: () {
+  //               Get.back();
+  //               controller.setNavIndex(1);
+  //             },
+  //           ),
+  //           ListTile(
+  //             leading: const Icon(Icons.account_balance_wallet),
+  //             title: const Text('Earnings'),
+  //             onTap: () {
+  //               Get.back();
+  //               controller.setNavIndex(2);
+  //             },
+  //           ),
+  //           ListTile(
+  //             leading: const Icon(Icons.description),
+  //             title: const Text('Documents'),
+  //             onTap: () {
+  //               Get.back();
+  //               Get.toNamed(Routes.driverDocumentUpload);
+  //             },
+  //           ),
+  //           ListTile(
+  //             leading: const Icon(Icons.person),
+  //             title: const Text('Profile'),
+  //             onTap: () {
+  //               Get.back();
+  //               controller.setNavIndex(3);
+  //             },
+  //           ),
+  //           const Divider(),
+  //           ListTile(
+  //             leading: const Icon(Icons.help),
+  //             title: const Text('Help & Support'),
+  //             onTap: () {
+  //               Get.back();
+  //               _showHelpSupportDialog();
+  //             },
+  //           ),
+  //           ListTile(
+  //             leading: const Icon(Icons.info),
+  //             title: const Text('About'),
+  //             onTap: () {
+  //               Get.back();
+  //               _showAboutDialog();
+  //             },
+  //           ),
+  //           ListTile(
+  //             leading: const Icon(Icons.logout),
+  //             title: const Text('Logout'),
+  //             onTap: () {
+  //               Get.back();
+  //               _confirmLogout();
+  //             },
+  //           ),
+  //         ],
+  //       ),
+  //     ),
+  //   );
+  // }
 
   void _showHelpSupportDialog() {
     Get.dialog(
@@ -1582,105 +1586,6 @@ class DriverHomeView extends GetView<DriverController> {
     );
   }
 
-  // Update the _buildTopBar method to show driver status
-  Widget _buildTopBar(BuildContext context) {
-    return Positioned(
-      top: 16,
-      left: 16,
-      right: 16,
-      child: Row(
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(30),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 10,
-                  offset: const Offset(0, 5),
-                ),
-              ],
-            ),
-            child: IconButton(
-              icon: const Icon(Icons.menu),
-              color: AppTheme.primaryColor,
-              onPressed: () {
-                _showMenuOptions();
-              },
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Obx(() {
-              Color statusColor;
-              String statusText;
-
-              switch (controller.driverStatus.value) {
-                case DriverStatus.online:
-                  statusColor = Colors.green;
-                  statusText = 'Online';
-                  break;
-                case DriverStatus.busy:
-                  statusColor = Colors.orange;
-                  statusText = 'Busy';
-                  break;
-                case DriverStatus.offline:
-                default:
-                  statusColor = Colors.red;
-                  statusText = 'Offline';
-                  break;
-              }
-
-              return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(30),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 10,
-                      offset: const Offset(0, 5),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.circle,
-                      color: statusColor,
-                      size: 12,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      statusText,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: statusColor,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }),
-          ),
-          const SizedBox(width: 16),
-          CircleAvatar(
-            backgroundColor: Colors.white,
-            child: IconButton(
-              icon: const Icon(Icons.person),
-              color: AppTheme.primaryColor,
-              onPressed: () {
-                controller.setNavIndex(3);
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   // Update the centerOnUserLocation method to be more robust
   void centerOnUserLocation() {

@@ -543,6 +543,227 @@ class RideDetailsView extends StatelessWidget {
   }
 
   void _showRateDriverDialog(BuildContext context) {
+    // First show payment confirmation
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return _buildPaymentConfirmationSheet(context);
+      },
+    );
+  }
+
+  Widget _buildPaymentConfirmationSheet(BuildContext context) {
+    final ride = controller.currentRide.value;
+    if (ride == null) return const SizedBox.shrink();
+    
+    return Container(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 50,
+              height: 5,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Trip Payment',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey[100],
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Base Fare',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    Text(
+                      '\$${((ride.fare ?? 0) * 0.8).toStringAsFixed(2)}',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Distance (${ride.distance.toStringAsFixed(1)} km)',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    Text(
+                      '\$${((ride.fare ?? 0) * 0.15).toStringAsFixed(2)}',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Time (${ride.duration.toStringAsFixed(0)} min)',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    Text(
+                      '\$${((ride.fare ?? 0) * 0.05).toStringAsFixed(2)}',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ],
+                ),
+                const Divider(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Total',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                    Text(
+                      '\$${(ride.fare ?? 0).toStringAsFixed(2)}',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.primaryColor,
+                          ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Payment Method',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey[300]!),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    ride.paymentMethod == 'cash' ? Icons.money : Icons.credit_card,
+                    color: AppTheme.primaryColor,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        ride.paymentMethod == 'cash' ? 'Cash' : 'Credit Card',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      if (ride.paymentMethod != 'cash')
+                        Text(
+                          'Ending in 1234',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 12,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                Radio(
+                  value: true,
+                  groupValue: true,
+                  onChanged: (_) {},
+                  activeColor: AppTheme.primaryColor,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 32),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () {
+                // Show loading indicator
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (context) => const Center(
+                    child: CircularProgressIndicator(),
+                  ),
+                );
+                
+                // Simulate payment processing
+                Future.delayed(const Duration(seconds: 2), () {
+                  // Dismiss loading dialog
+                  Navigator.pop(context);
+                  
+                  // Update ride as paid
+                  controller.markRideAsPaid(ride.id);
+                  
+                  // Dismiss payment sheet
+                  Navigator.pop(context);
+                  
+                  // Show rating dialog
+                  _showDriverRatingDialog(context);
+                });
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryColor,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Text(
+                'Confirm Payment - \$${(ride.fare ?? 0).toStringAsFixed(2)}',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDriverRatingDialog(BuildContext context) {
     double rating = 5.0;
     String feedback = '';
 
@@ -602,10 +823,47 @@ class RideDetailsView extends StatelessWidget {
             TextButton(
               onPressed: () {
                 Navigator.of(context).pop();
-                controller.rateDriver(controller.currentRide.value!.id, rating, feedback,);
-                Get.back();
+                controller.rateDriver(controller.currentRide.value!.id, rating, feedback);
+                
+                // Show thank you dialog
+                _showThankYouDialog(context);
               },
               child: const Text('Submit'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showThankYouDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Thank You!'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.check_circle,
+                color: Colors.green,
+                size: 64,
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Your payment has been processed and your feedback has been submitted.',
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                Get.back(); // Return to home screen
+              },
+              child: const Text('Done'),
             ),
           ],
         );

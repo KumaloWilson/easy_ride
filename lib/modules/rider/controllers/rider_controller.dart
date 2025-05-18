@@ -1967,6 +1967,36 @@ class RiderController extends GetxController {
       );
     }
   }
+
+  Future<void> markRideAsPaid(String rideId) async {
+    DevLogs.info('Marking ride as paid: $rideId');
+    try {
+      await _firestore.collection(Constants.ridesCollection).doc(rideId).update({
+        'isPaid': true,
+        'paymentStatus': 'completed',
+        'paymentCompletedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      // Update local ride object
+      if (currentRide.value != null && currentRide.value!.id == rideId) {
+        currentRide.value = currentRide.value!.copyWith(
+          isPaid: true,
+        );
+      }
+
+      DevLogs.info('Ride marked as paid successfully');
+    } catch (e) {
+      DevLogs.error('Error marking ride as paid', exception: e);
+      Get.snackbar(
+        'Error',
+        'Failed to process payment. Please try again.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
+  }
 }
 
 extension RiderControllerExtension on RiderController {

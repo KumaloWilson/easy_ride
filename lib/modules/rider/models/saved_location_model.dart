@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 import '../../../models/location_model.dart';
 
 class SavedLocationModel {
@@ -29,16 +31,8 @@ class SavedLocationModel {
       latitude: (map['latitude'] ?? 0.0).toDouble(),
       longitude: (map['longitude'] ?? 0.0).toDouble(),
       type: _parseLocationType(map['type'] ?? 'favorite'),
-      createdAt: map['createdAt'] != null
-          ? (map['createdAt'] is DateTime
-          ? map['createdAt']
-          : DateTime.parse(map['createdAt'].toString()))
-          : null,
-      updatedAt: map['updatedAt'] != null
-          ? (map['updatedAt'] is DateTime
-          ? map['updatedAt']
-          : DateTime.parse(map['updatedAt'].toString()))
-          : null,
+      createdAt: _parseDate(map['createdAt']),
+      updatedAt: _parseDate(map['updatedAt']),
     );
   }
 
@@ -67,4 +61,17 @@ class SavedLocationModel {
         return LocationType.favorite;
     }
   }
+
+  static DateTime? _parseDate(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    if (value is Timestamp) return value.toDate(); // handles Firestore Timestamp
+    try {
+      return DateTime.parse(value.toString()); // fallback
+    } catch (e) {
+      return null;
+    }
+  }
+
+
 }

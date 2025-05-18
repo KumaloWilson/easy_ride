@@ -31,6 +31,12 @@ abstract class Routes {
   static const rideDetails = '/ride-details';
   static const rideHistory = '/ride-history';
   
+  // Vehicle Hire Routes
+  static const vehicleHire = '/vehicle-hire';
+  static const vehicleHireDetails = '/vehicle-hire-details/:id';
+  static const hireDetails = '/hire-details';
+  static const hireHistory = '/hire-history';
+  
   // Chat Routes
   static const chat = '/chat';
 }

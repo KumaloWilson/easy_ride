@@ -29,6 +29,9 @@ import 'package:easy_ride/modules/driver/views/driver_verification_view.dart';
 import 'package:easy_ride/modules/chat/views/enhanced_chat_view.dart';
 import 'package:easy_ride/modules/rider/views/enhanced_ride_history_view.dart';
 import 'package:easy_ride/modules/profile/views/enhanced_profile_view.dart';
+import 'package:easy_ride/modules/rider/views/vehicle_hire_view.dart';
+import 'package:easy_ride/modules/rider/views/hire_details_view.dart';
+import 'package:easy_ride/modules/rider/views/hire_history_view.dart';
 
 part 'app_routes.dart';
 
@@ -84,11 +87,6 @@ class AppPages {
     GetPage(
       name: Routes.userTypeSelection,
       page: () => const UserTypeSelectionView(),
-      binding: AuthBinding(),
-    ),
-    GetPage(
-      name: Routes.emailVerification,
-      page: () => const EmailVerificationView(),
       binding: AuthBinding(),
     ),
     
@@ -162,6 +160,21 @@ class AppPages {
     GetPage(
       name: '/enhanced-ride-history',
       page: () => const EnhancedRideHistoryView(),
+      binding: RiderBinding(),
+    ),
+    GetPage(
+      name: Routes.vehicleHire,
+      page: () => VehicleHireView(),
+      binding: RiderBinding(),
+    ),
+    GetPage(
+      name: Routes.hireDetails,
+      page: () => HireDetailsView(hireId: Get.parameters['id'] ?? ''),
+      binding: RiderBinding(),
+    ),
+    GetPage(
+      name: Routes.hireHistory,
+      page: () => HireHistoryView(),
       binding: RiderBinding(),
     ),
     

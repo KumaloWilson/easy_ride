@@ -6,9 +6,7 @@ import 'package:easy_ride/modules/rider/views/rider_home_view.dart';
 import 'package:easy_ride/modules/rider/views/ride_history_view.dart';
 import 'package:easy_ride/modules/profile/views/profile_view.dart';
 import 'package:easy_ride/modules/chat/views/chat_view.dart';
-import 'package:easy_ride/modules/common/widgets/emergency_button.dart';
-import 'package:easy_ride/modules/common/widgets/feedback_form.dart';
-
+import '../../../routes/app_pages.dart';
 import '../views/saved_places.dart';
 
 class RiderSidebar extends StatelessWidget {
@@ -159,7 +157,6 @@ class RiderSidebar extends StatelessWidget {
               Get.to(() => const RideHistoryView());
             },
           ),
-
           _buildMenuItem(
             icon: Icons.location_on,
             title: 'Saved Places',
@@ -168,9 +165,27 @@ class RiderSidebar extends StatelessWidget {
               Get.to(() => SavedPlacesView());
             },
           ),
-
-
-
+          ListTile(
+            leading: Image.asset(
+              'assets/icons/car.png',
+              width: 24,
+              height: 24,
+              color: Colors.black87,
+            ),
+            title: const Text('Hire Vehicle'),
+            onTap: () {
+              Get.back();
+              Get.toNamed(Routes.vehicleHire);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.history),
+            title: const Text('Hire History'),
+            onTap: () {
+              Get.back();
+              Get.toNamed(Routes.hireHistory);
+            },
+          ),
           _buildMenuItem(
             icon: Icons.payment_outlined,
             title: 'Payment Methods',

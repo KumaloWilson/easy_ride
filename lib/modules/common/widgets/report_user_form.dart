@@ -369,7 +369,7 @@ class _ReportUserFormState extends State<ReportUserForm> {
                 child: AnimatedButton(
                   onPressed: _handleSubmit,
                   isLoading: widget.isLoading,
-                  isDisabled: widget.isLoading,
+                  //isDisabled: widget.isLoading,
                   backgroundColor: Colors.red,
                   child: const Text('Submit Report'),
                 ),

@@ -1,6 +1,7 @@
 import 'package:easy_ride/models/ride_model.dart';
 import 'package:easy_ride/modules/rider/views/ride_details_view.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get/get.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../../core/theme/app_theme.dart';
@@ -477,24 +478,48 @@ class RiderHomeView extends StatelessWidget {
         bottom: 250,
         left: 16,
         right: 16,
-        child: Card(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          elevation: 4,
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
+        child: AnimatedCard(
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'Active Ride',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                    Row(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryColor.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            _getRideStatusIcon(activeRide.status ?? 'pending'),
+                            color: AppTheme.primaryColor,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Active Ride',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
                     ),
                     _buildRideStatusBadge(context, activeRide.status ?? 'pending'),
                   ],
@@ -509,10 +534,23 @@ class RiderHomeView extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text(
-                        activeRide.dropoff?.name ?? 'Unknown destination',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'To',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                          Text(
+                            activeRide.dropoff?.name ?? 'Unknown destination',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontWeight: FontWeight.w500),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -538,6 +576,27 @@ class RiderHomeView extends StatelessWidget {
         ),
       );
     });
+  }
+
+  // Add this helper method for ride status icons
+  IconData _getRideStatusIcon(String status) {
+    switch (status) {
+      case 'pending':
+      case 'requested':
+        return Icons.search;
+      case 'accepted':
+        return Icons.directions_car;
+      case 'arrived':
+        return Icons.location_on;
+      case 'started':
+        return Icons.navigation;
+      case 'completed':
+        return Icons.check_circle;
+      case 'cancelled':
+        return Icons.cancel;
+      default:
+        return Icons.help;
+    }
   }
 
   Widget _buildRideStatusBadge(BuildContext context, String status) {
@@ -660,5 +719,46 @@ class RiderHomeView extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class AnimatedCard extends StatefulWidget {
+  final Widget child;
+
+  const AnimatedCard({Key? key, required this.child}) : super(key: key);
+
+  @override
+  _AnimatedCardState createState() => _AnimatedCardState();
+}
+
+class _AnimatedCardState extends State<AnimatedCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+    _animation = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      child: widget.child,
+    ).animate().fadeIn(duration: Duration(seconds: 2));
   }
 }

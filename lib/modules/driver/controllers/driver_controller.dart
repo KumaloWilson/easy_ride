@@ -121,6 +121,11 @@ class DriverController extends GetxController {
   StreamSubscription? _rideRequestSubscription;
   StreamSubscription? _currentRideSubscription;
 
+  // Add these to the class variables section
+  final RxBool isCompletingRide = false.obs;
+  final RxBool paymentReceived = false.obs;
+  final RxBool isPaymentAcknowledged = false.obs;
+
   @override
   void onInit() {
     super.onInit();
@@ -1144,8 +1149,85 @@ class DriverController extends GetxController {
     updateRideStatus('started');
   }
 
-  void completeRide() {
-    updateRideStatus('completed');
+  Future<void> completeRide() async {
+    if (currentRide.isEmpty) return;
+
+    try {
+      isCompletingRide.value = true;
+      final rideId = currentRide['id'];
+
+      // Update ride status to completed
+      await _firestore.collection('rides').doc(rideId).update({
+        'status': 'completed',
+        'completedAt': FieldValue.serverTimestamp(),
+        'waitingForPayment': true,
+      });
+
+      // Send notification to rider
+      final riderId = currentRide['riderId'];
+      await _sendNotification(
+        riderId,
+        'Ride Completed',
+        'Your ride has been completed. Please complete the payment.',
+        {
+          'type': 'ride_completed',
+          'rideId': rideId,
+        },
+      );
+
+      // Start listening for payment status
+      _listenForPaymentStatus(rideId);
+
+      DevLogs.debug('Ride marked as completed, waiting for payment');
+    } catch (e) {
+      isCompletingRide.value = false;
+      DevLogs.error('Error completing ride', exception: e);
+      Get.snackbar(
+        'Error',
+        'Failed to complete ride',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    }
+  }
+
+  void _listenForPaymentStatus(String rideId) {
+    // Listen for payment status updates
+    _firestore
+        .collection('rides')
+        .doc(rideId)
+        .snapshots()
+        .listen((snapshot) {
+      if (snapshot.exists) {
+        final data = snapshot.data()!;
+        
+        // Check if payment is completed
+        if (data['isPaid'] == true && isCompletingRide.value) {
+          isCompletingRide.value = false;
+          paymentReceived.value = true;
+          
+          // Update earnings data
+          _loadEarnings();
+          DevLogs.info('Payment received for ride: $rideId');
+        }
+      }
+    });
+  }
+
+  Future<void> acknowledgePayment() async {
+    try {
+      isPaymentAcknowledged.value = true;
+      
+      // Reset ride state and update driver status back to online
+      _resetRideState();
+      updateDriverStatus(DriverStatus.online);
+      
+      // Navigate back to home
+      Get.offAllNamed(Routes.driverHome);
+      
+      DevLogs.info('Payment acknowledged, returned to home screen');
+    } catch (e) {
+      DevLogs.error('Error acknowledging payment', exception: e);
+    }
   }
 
   Future<void> cancelRide() async {

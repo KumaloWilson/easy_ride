@@ -9,6 +9,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.3.54"
+  animated_button:
+    dependency: "direct main"
+    description:
+      name: animated_button
+      sha256: "238e093023955b3a21b14d230baeecb94fc796379e3dd8ee534c158838f24024"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.3.1"
   ansicolor:
     dependency: transitive
     description:

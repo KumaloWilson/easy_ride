@@ -571,6 +571,36 @@ class NotificationService extends GetxService {
 
     return driverIds;
   }
+
+  // Add this to the NotificationService class
+  Future<void> handlePaymentNotification(String userId, String title, String body, Map<String, dynamic> data) async {
+    try {
+      // First send the notification
+      await sendNotificationToUser(userId, title, body, data);
+      
+      // Then save to notifications collection with payment-specific data
+      if (_authService.firebaseUser.value != null) {
+        await _firestore.collection('notifications').add({
+          'userId': userId,
+          'title': title,
+          'body': body,
+          'data': {
+            ...data,
+            'isPaymentNotification': true,
+            'amount': data['amount'] ?? 0.0,
+          },
+          'read': false,
+          'createdAt': FieldValue.serverTimestamp(),
+          'category': 'payment',
+          'priority': 'high',
+        });
+
+        DevLogs.info('Payment notification sent and saved for user: $userId');
+      }
+    } catch (e) {
+      DevLogs.error('Error sending payment notification', exception: e);
+    }
+  }
 }
 
 @pragma('vm:entry-point')

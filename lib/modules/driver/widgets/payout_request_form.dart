@@ -296,7 +296,7 @@ class _PayoutRequestFormState extends State<PayoutRequestForm> {
                 child: AnimatedButton(
                   onPressed: _handleSubmit,
                   isLoading: widget.isLoading,
-                  isDisabled: widget.isLoading,
+                  //isDisabled: widget.isLoading,
                   child: const Text('Submit Request'),
                 ),
               ),

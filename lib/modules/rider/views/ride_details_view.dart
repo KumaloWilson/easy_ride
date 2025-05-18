@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../models/ride_model.dart';
 import '../../../models/ride_status.dart';
+import '../../../routes/app_pages.dart';
 import '../controllers/rider_controller.dart';
 
 class RideDetailsView extends StatelessWidget {
@@ -577,11 +578,17 @@ class RideDetailsView extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 24),
-          Text(
-            'Trip Payment',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+          Row(
+            children: [
+              Icon(Icons.payment, color: AppTheme.primaryColor, size: 28),
+              const SizedBox(width: 12),
+              Text(
+                'Trip Payment',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           Container(
@@ -589,6 +596,13 @@ class RideDetailsView extends StatelessWidget {
             decoration: BoxDecoration(
               color: Colors.grey[100],
               borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
             child: Column(
               children: [
@@ -714,51 +728,122 @@ class RideDetailsView extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 32),
-          SizedBox(
+          Obx(() => SizedBox(
             width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                // Show loading indicator
-                showDialog(
-                  context: context,
-                  barrierDismissible: false,
-                  builder: (context) => const Center(
-                    child: CircularProgressIndicator(),
+            child: controller.isProcessingPayment.value
+              ? Container(
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[200],
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                );
-                
-                // Simulate payment processing
-                Future.delayed(const Duration(seconds: 2), () {
-                  // Dismiss loading dialog
-                  Navigator.pop(context);
-                  
-                  // Update ride as paid
-                  controller.markRideAsPaid(ride.id);
-                  
-                  // Dismiss payment sheet
-                  Navigator.pop(context);
-                  
-                  // Show rating dialog
-                  _showDriverRatingDialog(context);
-                });
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primaryColor,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  child: Center(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        const Text('Processing payment...', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                )
+              : ElevatedButton(
+                  onPressed: () {
+                    controller.isProcessingPayment.value = true;
+                    
+                    // Simulate payment processing
+                    Future.delayed(const Duration(seconds: 2), () {
+                      // Update ride as paid
+                      controller.markRideAsPaid(ride.id);
+                      
+                      // Dismiss payment sheet
+                      Navigator.pop(context);
+                      
+                      // Show success animation
+                      _showPaymentSuccessAnimation(context);
+                    });
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryColor,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text(
+                    'Confirm Payment - \$${(ride.fare ?? 0).toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
+          )),
+        ],
+      ),
+    );
+  }
+
+  void _showPaymentSuccessAnimation(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.check_circle,
+                color: Colors.green,
+                size: 80,
               ),
-              child: Text(
-                'Confirm Payment - \$${(ride.fare ?? 0).toStringAsFixed(2)}',
-                style: const TextStyle(
-                  fontSize: 16,
+              const SizedBox(height: 20),
+              const Text(
+                'Payment Successful!',
+                style: TextStyle(
+                  fontSize: 20,
                   fontWeight: FontWeight.bold,
                 ),
               ),
-            ),
+              const SizedBox(height: 10),
+              const Text(
+                'Your payment has been processed successfully.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _showDriverRatingDialog(context);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryColor,
+                  minimumSize: const Size(double.infinity, 50),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text('Rate Your Driver'),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -769,9 +854,16 @@ class RideDetailsView extends StatelessWidget {
 
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Rate Your Driver'),
+          title: Row(
+            children: [
+              Icon(Icons.star, color: Colors.amber, size: 28),
+              SizedBox(width: 10),
+              Text('Rate Your Driver'),
+            ],
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -817,18 +909,41 @@ class RideDetailsView extends StatelessWidget {
             TextButton(
               onPressed: () {
                 Navigator.of(context).pop();
+                _showThankYouDialog(context);
               },
               child: const Text('Skip'),
             ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                controller.rateDriver(controller.currentRide.value!.id, rating, feedback);
-                
-                // Show thank you dialog
-                _showThankYouDialog(context);
-              },
-              child: const Text('Submit'),
+            Obx(() => controller.isSubmittingRating.value
+              ? Container(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
+                    ),
+                  ),
+                )
+              : ElevatedButton(
+                  onPressed: () {
+                    controller.isSubmittingRating.value = true;
+                    
+                    // Submit rating with animation
+                    Future.delayed(Duration(milliseconds: 800), () {
+                      controller.rateDriver(controller.currentRide.value!.id, rating, feedback);
+                      controller.isSubmittingRating.value = false;
+                      Navigator.of(context).pop();
+                      
+                      // Show thank you dialog
+                      _showThankYouDialog(context);
+                    });
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryColor,
+                  ),
+                  child: const Text('Submit'),
+                ),
             ),
           ],
         );
@@ -839,16 +954,24 @@ class RideDetailsView extends StatelessWidget {
   void _showThankYouDialog(BuildContext context) {
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Thank You!'),
+          title: Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.green, size: 28),
+              SizedBox(width: 10),
+              Text('Thank You!'),
+            ],
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
-                Icons.check_circle,
-                color: Colors.green,
-                size: 64,
+              Lottie.asset(
+                'assets/animations/thank_you.json',
+                width: 150,
+                height: 150,
+                repeat: false,
               ),
               const SizedBox(height: 16),
               const Text(
@@ -858,12 +981,17 @@ class RideDetailsView extends StatelessWidget {
             ],
           ),
           actions: [
-            TextButton(
+            ElevatedButton(
               onPressed: () {
                 Navigator.of(context).pop();
-                Get.back(); // Return to home screen
+                // Return to home screen with animation
+                Get.offAllNamed(Routes.riderHome,);
               },
-              child: const Text('Done'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryColor,
+                minimumSize: Size(double.infinity, 45),
+              ),
+              child: const Text('Return to Home'),
             ),
           ],
         );

@@ -64,6 +64,7 @@ dependencies:
   pdf: ^3.11.3
   cached_network_image: ^3.4.1
   smooth_page_indicator: ^1.2.1
+  animated_button: ^0.3.1
 
 dev_dependencies:
   flutter_test:

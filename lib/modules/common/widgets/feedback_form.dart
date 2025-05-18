@@ -3,10 +3,12 @@ import 'package:easy_ride/core/theme/app_theme.dart';
 import 'package:easy_ride/models/feedback_model.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:easy_ride/core/widgets/animated_button.dart';
+// import 'package:easy_ride/core/widgets/animated_button.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:easy_ride/core/animations/animations.dart';
 import 'dart:io';
+
+import '../../../core/widgets/animated_button.dart';
 
 class FeedbackForm extends StatefulWidget {
   final String? rideId;
@@ -398,7 +400,7 @@ class _FeedbackFormState extends State<FeedbackForm> {
                 child: AnimatedButton(
                   onPressed: _handleSubmit,
                   isLoading: widget.isLoading,
-                  isDisabled: widget.isLoading,
+                  //isDisabled: widget.isLoading,
                   child: const Text('Submit Feedback'),
                 ),
               ),

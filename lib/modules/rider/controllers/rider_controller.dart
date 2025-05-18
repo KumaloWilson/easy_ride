@@ -142,6 +142,11 @@ class RiderController extends GetxController {
   final RxBool hasRiderConfirmedStart = false.obs;
   final RxBool hasDriverConfirmedStart = false.obs;
 
+  // Add these to the class variables section
+  final RxBool isProcessingPayment = false.obs;
+  final RxBool isSubmittingRating = false.obs;
+  final RxBool isPaymentCompleted = false.obs;
+
   @override
   void onInit() {
     super.onInit();
@@ -1640,32 +1645,45 @@ class RiderController extends GetxController {
 
   Future<void> rateDriver(String rideId, double rating, String feedback) async {
     DevLogs.info('Rating driver for ride: $rideId');
-    isLoading.value = true;
+    isSubmittingRating.value = true;
 
     try {
+      // Get the ride details to get driver ID
+      final rideDoc = await _firestore.collection(Constants.ridesCollection).doc(rideId).get();
+      if (!rideDoc.exists) {
+        throw Exception('Ride not found');
+      }
+      
+      final rideData = rideDoc.data()!;
+      final driverId = rideData['driverId'];
+      
+      if (driverId == null) {
+        throw Exception('Driver ID not found in ride data');
+      }
+      
       await _firestore.collection(Constants.ridesCollection).doc(rideId).update({
         'driverRating': rating,
         'driverFeedback': feedback,
+        'ratingSubmittedAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      // Get driver ID from ride
-      final rideDoc = await _firestore.collection(Constants.ridesCollection).doc(rideId).get();
-      if (rideDoc.exists) {
-        final rideData = rideDoc.data()!;
-        final driverId = rideData['driverId'];
-
-        if (driverId != null) {
-          // Update driver's average rating
-          await _updateDriverRating(driverId, rating);
-        }
+      // Update driver's average rating
+      await _updateDriverRating(driverId, rating);
+      
+      // Send notification to driver about the rating
+      if (rating >= 4) {
+        await _notificationService.sendNotificationToUser(
+          driverId,
+          'New Rating Received',
+          'You received a ${rating.toStringAsFixed(1)} star rating!',
+          {
+            'type': 'driver_rated',
+            'rideId': rideId,
+            'rating': rating,
+          },
+        );
       }
-
-      Get.snackbar(
-        'Thank You',
-        'Your rating has been submitted',
-        snackPosition: SnackPosition.BOTTOM,
-      );
 
       DevLogs.info('Driver rated successfully');
     } catch (e) {
@@ -1676,7 +1694,7 @@ class RiderController extends GetxController {
         snackPosition: SnackPosition.BOTTOM,
       );
     } finally {
-      isLoading.value = false;
+      isSubmittingRating.value = false;
     }
   }
 
@@ -1970,7 +1988,23 @@ class RiderController extends GetxController {
 
   Future<void> markRideAsPaid(String rideId) async {
     DevLogs.info('Marking ride as paid: $rideId');
+    isProcessingPayment.value = true;
+    
     try {
+      // Get the ride details to get driver ID
+      final rideDoc = await _firestore.collection(Constants.ridesCollection).doc(rideId).get();
+      if (!rideDoc.exists) {
+        throw Exception('Ride not found');
+      }
+      
+      final rideData = rideDoc.data()!;
+      final driverId = rideData['driverId'];
+      
+      if (driverId == null) {
+        throw Exception('Driver ID not found in ride data');
+      }
+      
+      // Update ride payment status
       await _firestore.collection(Constants.ridesCollection).doc(rideId).update({
         'isPaid': true,
         'paymentStatus': 'completed',
@@ -1984,8 +2018,21 @@ class RiderController extends GetxController {
           isPaid: true,
         );
       }
-
-      DevLogs.info('Ride marked as paid successfully');
+      
+      // Send notification to driver
+      await _notificationService.sendNotificationToUser(
+        driverId,
+        'Payment Received',
+        'The rider has completed the payment for the ride',
+        {
+          'type': 'payment_completed',
+          'rideId': rideId,
+          'amount': rideData['fare'] ?? 0.0,
+        },
+      );
+      
+      isPaymentCompleted.value = true;
+      DevLogs.info('Ride marked as paid successfully and driver notified');
     } catch (e) {
       DevLogs.error('Error marking ride as paid', exception: e);
       Get.snackbar(
@@ -1995,6 +2042,8 @@ class RiderController extends GetxController {
         backgroundColor: Colors.red,
         colorText: Colors.white,
       );
+    } finally {
+      isProcessingPayment.value = false;
     }
   }
 }

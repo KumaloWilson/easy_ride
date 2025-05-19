@@ -588,13 +588,13 @@ class VehicleHireController extends GetxController {
       if (selectedDurationType.value == HireDurationType.hourly) {
         // Calculate hours (rounded up to nearest 0.5)
         final durationHours = endTime.difference(startTime).inMinutes / 60;
-        final roundedHours = (durationHours * 2).ceil() / 2; // Round up to nearest 0.5
-        cost = roundedHours * vehicle.hourlyRate;
+        final roundedHours = (durationHours * 2).ceil() / 2;
+        cost = roundedHours * num.parse(vehicle.hourlyRate.toString());
       } else {
         // Calculate days (including partial days)
         final durationDays = endTime.difference(startTime).inHours / 24;
         final roundedDays = durationDays.ceil(); // Round up to full days
-        cost = roundedDays * vehicle.dailyRate;
+        cost = (roundedDays * num.parse(vehicle.dailyRate.toString())).toDouble();
       }
       
       // Add extra for stops

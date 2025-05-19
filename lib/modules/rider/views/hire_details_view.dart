@@ -336,7 +336,7 @@ class _HireDetailsViewState extends State<HireDetailsView> {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          '${vehicle!.rating.toStringAsFixed(1)} (${vehicle!.ratingCount} ratings)',
+                          '${vehicle!.rating?.toStringAsFixed(1)} (${vehicle!.ratingCount} ratings)',
                           style: TextStyle(
                             color: Colors.grey[600],
                             fontSize: 12,
@@ -355,10 +355,10 @@ class _HireDetailsViewState extends State<HireDetailsView> {
             runSpacing: 8,
             children: [
               _buildFeatureChip(Icons.people, '${vehicle!.passengerCapacity} seats'),
-              if (vehicle!.airConditioned)
+              if (vehicle!.airConditioned != null)
                 _buildFeatureChip(Icons.ac_unit, 'A/C'),
               _buildFeatureChip(Icons.luggage, '${vehicle!.luggageCapacity} bags'),
-              _buildFeatureChip(Icons.settings, vehicle!.transmissionType),
+              _buildFeatureChip(Icons.settings, vehicle!.transmissionType.toString().split('.').last),
             ],
           ),
         ],

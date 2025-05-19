@@ -5,13 +5,12 @@ import 'package:easy_ride/core/theme/app_theme.dart';
 import 'package:easy_ride/modules/rider/controllers/vehicle_hire_controller.dart';
 import 'package:easy_ride/models/hire_vehicle_model.dart';
 import 'package:easy_ride/modules/rider/widgets/vehicle_card.dart';
-
-import '../../../models/vehicle_hire_model.dart';
+import 'package:easy_ride/models/vehicle_hire_model.dart';
 
 class VehicleHireView extends StatelessWidget {
   final VehicleHireController controller = Get.put(VehicleHireController());
 
-  VehicleHireView({Key? key}) : super(key: key);
+  VehicleHireView({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -21,15 +20,11 @@ class VehicleHireView extends StatelessWidget {
         backgroundColor: AppTheme.primaryColor,
         elevation: 0,
       ),
-      body: Obx(() {
-        if (controller.currentHire.value != null) {
-          // Show active hire
-          return _buildActiveHireView(context);
-        } else {
-          // Show vehicle selection
-          return _buildVehicleSelectionView(context);
-        }
-      }),
+      body: Obx(() =>
+      controller.currentHire.value != null
+          ? _buildActiveHireView(context)
+          : _buildVehicleSelectionView(context)
+      ),
     );
   }
 
@@ -41,58 +36,71 @@ class VehicleHireView extends StatelessWidget {
           child: Obx(() {
             if (controller.isLoadingVehicles.value) {
               return const Center(child: CircularProgressIndicator());
-            }  {
-              return const Center(child: CircularProgressIndicator());
             }
 
             if (controller.availableVehicles.isEmpty) {
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.car_rental, size: 64, color: Colors.grey),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'No vehicles available',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Try changing the vehicle type or check back later',
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 24),
-                    ElevatedButton(
-                      onPressed: () => controller.fetchAvailableVehicles(),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.primaryColor,
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                      ),
-                      child: const Text('Refresh'),
-                    ),
-                  ],
-                ),
-              );
+              return _buildEmptyVehiclesList();
             }
 
-            return ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: controller.availableVehicles.length,
-              itemBuilder: (context, index) {
-                final vehicle = controller.availableVehicles[index];
-                return VehicleCard(
-                  vehicle: vehicle,
-                  onTap: () => controller.selectVehicle(vehicle),
-                );
-              },
-            );
+            return _buildVehiclesList();
           }),
         ),
       ],
     );
   }
 
+  Widget _buildEmptyVehiclesList() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.car_rental, size: 64, color: Colors.grey),
+          const SizedBox(height: 16),
+          const Text(
+            'No vehicles available',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Try changing the vehicle type or check back later',
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton(
+            onPressed: () => controller.fetchAvailableVehicles(),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primaryColor,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+            child: const Text('Refresh'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVehiclesList() {
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: controller.availableVehicles.length,
+      itemBuilder: (context, index) {
+        final vehicle = controller.availableVehicles[index];
+        return VehicleCard(
+          vehicle: vehicle,
+          onTap: () => controller.selectVehicle(vehicle),
+        );
+      },
+    );
+  }
+
   Widget _buildVehicleTypeSelector() {
+    final vehicleTypes = [
+      _VehicleTypeOption(HireVehicleType.car, 'Car', Icons.directions_car),
+      _VehicleTypeOption(HireVehicleType.van, 'Van', Icons.airport_shuttle),
+      _VehicleTypeOption(HireVehicleType.luxury, 'Luxury', Icons.star),
+      _VehicleTypeOption(HireVehicleType.suv, 'SUV', Icons.directions_car),
+    ];
+
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
@@ -109,12 +117,9 @@ class VehicleHireView extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Row(
-          children: [
-            _buildVehicleTypeOption(HireVehicleType.car, 'Car', Icons.directions_car),
-            _buildVehicleTypeOption(HireVehicleType.van, 'Van', Icons.airport_shuttle),
-            _buildVehicleTypeOption(HireVehicleType.luxury, 'Luxury', Icons.star),
-            _buildVehicleTypeOption(HireVehicleType.suv, 'SUV', Icons.directions_car),
-          ],
+          children: vehicleTypes.map((option) =>
+              _buildVehicleTypeOption(option.type, option.name, option.icon)
+          ).toList(),
         ),
       ),
     );
@@ -160,184 +165,188 @@ class VehicleHireView extends StatelessWidget {
 
   Widget _buildActiveHireView(BuildContext context) {
     final hire = controller.currentHire.value!;
-    
+
     return Column(
       children: [
-        // Map showing vehicle location
-        Expanded(
-          flex: 3,
-          child: Stack(
-            children: [
-              GoogleMap(
-                initialCameraPosition: CameraPosition(
-                  target: controller.vehicleLocation.value ?? 
-                          controller.currentLocation.value,
-                  zoom: 15,
-                ),
-                markers: controller.markers,
-                polylines: controller.polylines,
-                myLocationEnabled: true,
-                myLocationButtonEnabled: false,
-                zoomControlsEnabled: false,
-                mapToolbarEnabled: false,
-                compassEnabled: true,
-                onMapCreated: controller.onMapCreated,
-              ),
-              Positioned(
-                right: 16,
-                bottom: 16,
-                child: FloatingActionButton(
-                  heroTag: 'currentLocationBtn',
-                  backgroundColor: Colors.white,
-                  child: const Icon(
-                    Icons.my_location,
-                    color: Colors.black87,
-                  ),
-                  onPressed: () {
-                    if (controller.vehicleLocation.value != null && 
-                        controller.mapController.value != null) {
-                      controller.mapController.value!.animateCamera(
-                        CameraUpdate.newLatLngZoom(controller.vehicleLocation.value!, 15),
-                      );
-                    }
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-        
-        // Hire details
-        Expanded(
-          flex: 2,
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(20),
-                topRight: Radius.circular(20),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black12,
-                  blurRadius: 10,
-                  spreadRadius: 0,
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Hire Status',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    _buildStatusBadge(hire.status),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildInfoRow('Purpose', hire.formattedPurpose),
-                        _buildInfoRow('Duration', hire.formattedDuration),
-                        _buildInfoRow('Pickup', hire.pickupLocation.name),
-                        if (hire.stops.isNotEmpty)
-                          _buildInfoRow('Stops', '${hire.stops.length} stops'),
-                        _buildInfoRow('Total Cost', '\$${hire.totalCost.toStringAsFixed(2)}'),
-                        _buildInfoRow('Payment', hire.paymentMethod.capitalize!),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                if (hire.status == HireStatus.pending || hire.status == HireStatus.approved)
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () => _showCancelConfirmation(context),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      child: const Text('Cancel Hire'),
-                    ),
-                  ),
-                if (hire.status == HireStatus.completed && hire.rating == null)
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () => _showRatingDialog(context, hire.id),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.primaryColor,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      child: const Text('Rate Your Experience'),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
+        _buildMapSection(),
+        _buildHireDetailsSection(context, hire),
       ],
     );
   }
 
-  Widget _buildStatusBadge(HireStatus status) {
-    Color color;
-    String text;
+  Widget _buildMapSection() {
+    return Expanded(
+      flex: 3,
+      child: Stack(
+        children: [
+          Obx(() => GoogleMap(
+            initialCameraPosition: CameraPosition(
+              target: controller.vehicleLocation.value ??
+                  controller.currentLocation.value,
+              zoom: 15,
+            ),
+            markers: controller.markers,
+            polylines: controller.polylines,
+            myLocationEnabled: true,
+            myLocationButtonEnabled: false,
+            zoomControlsEnabled: false,
+            mapToolbarEnabled: false,
+            compassEnabled: true,
+            onMapCreated: controller.onMapCreated,
+          )),
+          Positioned(
+            right: 16,
+            bottom: 16,
+            child: FloatingActionButton(
+              heroTag: 'currentLocationBtn',
+              backgroundColor: Colors.white,
+              child: const Icon(
+                Icons.my_location,
+                color: Colors.black87,
+              ),
+              onPressed: _centerMapOnVehicle,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-    switch (status) {
-      case HireStatus.pending:
-        color = Colors.orange;
-        text = 'Pending Approval';
-        break;
-      case HireStatus.approved:
-        color = Colors.blue;
-        text = 'Approved';
-        break;
-      case HireStatus.active:
-        color = Colors.green;
-        text = 'Active';
-        break;
-      case HireStatus.completed:
-        color = Colors.purple;
-        text = 'Completed';
-        break;
-      case HireStatus.cancelled:
-        color = Colors.red;
-        text = 'Cancelled';
-        break;
-      case HireStatus.rejected:
-        color = Colors.red;
-        text = 'Rejected';
-        break;
-      default:
-        color = Colors.grey;
-        text = 'Unknown';
+  void _centerMapOnVehicle() {
+    if (controller.vehicleLocation.value != null &&
+        controller.mapController.value != null) {
+      controller.mapController.value!.animateCamera(
+        CameraUpdate.newLatLngZoom(controller.vehicleLocation.value!, 15),
+      );
     }
+  }
+
+  Widget _buildHireDetailsSection(BuildContext context, VehicleHireModel hire) {
+    return Expanded(
+      flex: 2,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
+          ),
+          boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildHireHeader(context, hire),
+            const SizedBox(height: 16),
+            _buildHireDetails(hire),
+            const SizedBox(height: 16),
+            _buildActionButton(context, hire),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHireHeader(BuildContext context, VehicleHireModel hire) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          'Hire Status',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        _buildStatusBadge(hire.status),
+      ],
+    );
+  }
+
+  Widget _buildHireDetails(VehicleHireModel hire) {
+    return Expanded(
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildInfoRow('Purpose', hire.formattedPurpose),
+            _buildInfoRow('Duration', hire.formattedDuration),
+            _buildInfoRow('Pickup', hire.pickupLocation.name),
+            if (hire.stops.isNotEmpty)
+              _buildInfoRow('Stops', '${hire.stops.length} stops'),
+            _buildInfoRow('Total Cost', '\$${hire.totalCost.toStringAsFixed(2)}'),
+            _buildInfoRow('Payment', hire.paymentMethod.capitalize!),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionButton(BuildContext context, VehicleHireModel hire) {
+    if (hire.status == HireStatus.pending || hire.status == HireStatus.approved) {
+      return SizedBox(
+        width: double.infinity,
+        child: ElevatedButton(
+          onPressed: () => _showCancelConfirmation(context),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.red,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+          ),
+          child: const Text('Cancel Hire'),
+        ),
+      );
+    } else if (hire.status == HireStatus.completed && hire.rating == null) {
+      return SizedBox(
+        width: double.infinity,
+        child: ElevatedButton(
+          onPressed: () => _showRatingDialog(context, hire.id),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppTheme.primaryColor,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+          ),
+          child: const Text('Rate Your Experience'),
+        ),
+      );
+    } else {
+      return const SizedBox.shrink();
+    }
+  }
+
+  Widget _buildStatusBadge(HireStatus status) {
+    final statusConfig = _getStatusConfig(status);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: statusConfig.color.withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color),
+        border: Border.all(color: statusConfig.color),
       ),
       child: Text(
-        text,
+        statusConfig.text,
         style: TextStyle(
-          color: color,
+          color: statusConfig.color,
           fontWeight: FontWeight.bold,
         ),
       ),
     );
+  }
+
+  _StatusConfig _getStatusConfig(HireStatus status) {
+    switch (status) {
+      case HireStatus.pending:
+        return _StatusConfig(Colors.orange, 'Pending Approval');
+      case HireStatus.approved:
+        return _StatusConfig(Colors.blue, 'Approved');
+      case HireStatus.active:
+        return _StatusConfig(Colors.green, 'Active');
+      case HireStatus.completed:
+        return _StatusConfig(Colors.purple, 'Completed');
+      case HireStatus.cancelled:
+        return _StatusConfig(Colors.red, 'Cancelled');
+      case HireStatus.rejected:
+        return _StatusConfig(Colors.red, 'Rejected');
+      default:
+        return _StatusConfig(Colors.grey, 'Unknown');
+    }
   }
 
   Widget _buildInfoRow(String label, String value) {
@@ -459,4 +468,20 @@ class VehicleHireView extends StatelessWidget {
       ),
     );
   }
+}
+
+// Helper classes for better code organization
+class _VehicleTypeOption {
+  final HireVehicleType type;
+  final String name;
+  final IconData icon;
+
+  _VehicleTypeOption(this.type, this.name, this.icon);
+}
+
+class _StatusConfig {
+  final Color color;
+  final String text;
+
+  _StatusConfig(this.color, this.text);
 }

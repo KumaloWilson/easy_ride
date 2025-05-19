@@ -85,12 +85,12 @@ class VehicleCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      _buildRatingWidget(vehicle.rating),
+                      _buildRatingWidget(vehicle.rating ?? 3),
                     ],
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    vehicle.description,
+                    vehicle.description ?? "Description not available",
                     style: TextStyle(
                       color: Colors.grey[600],
                       fontSize: 14,
@@ -109,7 +109,7 @@ class VehicleCard extends StatelessWidget {
                         Icons.people, 
                         '${vehicle.passengerCapacity} seats'
                       ),
-                      if (vehicle.airConditioned)
+                      if (vehicle.airConditioned ?? false)
                         _buildFeatureChip(Icons.ac_unit, 'A/C'),
                       _buildFeatureChip(
                         Icons.luggage, 
@@ -117,7 +117,7 @@ class VehicleCard extends StatelessWidget {
                       ),
                       _buildFeatureChip(
                         Icons.settings, 
-                        vehicle.transmissionType
+                        vehicle.transmissionType ?? "Automatic"
                       ),
                     ],
                   ),
@@ -132,7 +132,7 @@ class VehicleCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '\$${vehicle.hourlyRate.toStringAsFixed(2)}/hour',
+                            '\$${vehicle.hourlyRate!.toStringAsFixed(2)}/hour',
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
@@ -140,7 +140,7 @@ class VehicleCard extends StatelessWidget {
                             ),
                           ),
                           Text(
-                            '\$${vehicle.dailyRate.toStringAsFixed(2)}/day',
+                            '\$${vehicle.dailyRate!.toStringAsFixed(2)}/day',
                             style: TextStyle(
                               fontSize: 14,
                               color: Colors.grey[600],

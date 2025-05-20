@@ -335,10 +335,10 @@ class RideDetailsView extends StatelessWidget {
             children: [
               CircleAvatar(
                 radius: 30,
-                backgroundImage: driverInfo['user']['photoUrl'] != null
-                    ? NetworkImage(driverInfo['user']['photoUrl'])
+                backgroundImage: driverInfo.user.profileImageUrl != null
+                    ? NetworkImage(driverInfo.user.profileImageUrl!)
                     : null,
-                child: driverInfo['user']['photoUrl'] == null
+                child: driverInfo.user.profileImageUrl == null
                     ? const Icon(Icons.person, size: 30)
                     : null,
               ),
@@ -348,14 +348,14 @@ class RideDetailsView extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      driverInfo['user']['fullName'] ?? 'Driver',
+                      driverInfo.user.fullName,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.bold,
                           ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      driverInfo['driver']['carDetails'] ?? 'Vehicle',
+                      driverInfo.vehicle.model ?? 'Vehicle',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 4),
@@ -368,7 +368,7 @@ class RideDetailsView extends StatelessWidget {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          '${driverInfo['driver']['rating'] ?? 4.5}',
+                          '${driverInfo.rating ?? 4.5}',
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
                       ],
@@ -381,7 +381,7 @@ class RideDetailsView extends StatelessWidget {
                   IconButton(
                     icon: const Icon(Icons.phone, color: Colors.green),
                     onPressed: () {
-                      _callDriver(driverInfo['user']['phoneNumber']);
+                      _callDriver(driverInfo.user.phoneNumber);
                     },
                   ),
                   IconButton(

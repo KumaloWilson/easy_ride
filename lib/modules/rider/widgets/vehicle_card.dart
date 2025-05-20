@@ -44,7 +44,7 @@ class VehicleCard extends StatelessWidget {
                 topRight: Radius.circular(12),
               ),
               child: Image.network(
-                vehicle.photoUrl,
+                vehicle.photos[0],
                 height: 160,
                 width: double.infinity,
                 fit: BoxFit.cover,

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:easy_ride/core/values/constants.dart';
+import 'package:easy_ride/models/driver_model.dart';
 import 'package:get/get.dart';
 import 'package:location/location.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -154,58 +155,70 @@ class LocationService extends GetxService {
         'lastUpdated': FieldValue.serverTimestamp(),
       });
 
+      await _firestore.collection(Constants.driversCollection).doc(driverId).update({
+        'isOnline': false,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      });
+
       DevLogs.info('Driver set to offline');
     }
   }
 
-  Future<List<LocationModel>> getNearbyDrivers(LatLng location, double radiusInKm) async {
+
+  Future<List<DriverModel>> getNearbyDrivers(LatLng location, double radiusInKm) async {
     DevLogs.info('Searching for nearby drivers within $radiusInKm km');
 
     // Get all online drivers
-    QuerySnapshot snapshot = await _firestore.collection(Constants.driverLocationsCollection)
+    QuerySnapshot snapshot = await _firestore.collection(Constants.driversCollection)
         .where('isOnline', isEqualTo: true)
         .get();
 
-    List<LocationModel> nearbyDrivers = [];
+    List<DriverModel> nearbyDrivers = [];
 
     for (var doc in snapshot.docs) {
       Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-      GeoPoint driverLocation = data['location'] as GeoPoint;
 
-      // Calculate distance
-      double distance = calculateDistance(
-        location.latitude,
-        location.longitude,
-        driverLocation.latitude,
-        driverLocation.longitude,
-      );
+      // Check if the document has the necessary location data
+      if (data['currentLocation'] != null) {
+        LocationModel driverLocation = LocationModel.fromJson(data['currentLocation']);
 
-      // Check if driver is within radius
-      if (distance <= radiusInKm) {
-        // Get driver details
-        DocumentSnapshot driverDoc = await _firestore.collection('users').doc(data['driverId']).get();
-        String driverName = "Driver";
-
-        if (driverDoc.exists) {
-          Map<String, dynamic> driverData = driverDoc.data() as Map<String, dynamic>;
-          driverName = driverData['fullName'] ?? "Driver";
-        }
-
-        LocationModel driverLocationModel = LocationModel(
-          name: driverName,
-          address: "Online Driver",
-          latitude: driverLocation.latitude,
-          longitude: driverLocation.longitude,
-          placeId: data['driverId'],
-          distance: distance,
+        // Calculate distance
+        double distance = calculateDistance(
+          location.latitude,
+          location.longitude,
+          driverLocation.latitude,
+          driverLocation.longitude,
         );
 
-        nearbyDrivers.add(driverLocationModel);
+        // Check if driver is within radius
+        if (distance <= radiusInKm) {
+          try {
+            // Get user details to build complete driver model
+            DocumentSnapshot userDoc = await _firestore.collection(Constants.driversCollection).doc(data['id']).get();
+
+            if (userDoc.exists && userDoc.data() != null) {
+              Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
+
+
+              // Create driver model
+              DriverModel driver = DriverModel.fromJson(userData);
+
+              // Update the distance for sorting purposes
+              driver = driver.copyWith(
+                  currentLocation: driver.currentLocation.copyWith(distance: distance)
+              );
+
+              nearbyDrivers.add(driver);
+            }
+          } catch (e) {
+            DevLogs.error('Error fetching driver details: $e');
+          }
+        }
       }
     }
 
     // Sort by distance
-    nearbyDrivers.sort((a, b) => (a.distance ?? 0).compareTo(b.distance ?? 0));
+    nearbyDrivers.sort((a, b) => (a.currentLocation.distance ?? 0).compareTo(b.currentLocation.distance ?? 0));
 
     DevLogs.info('Found ${nearbyDrivers.length} nearby drivers');
     return nearbyDrivers;
@@ -360,7 +373,7 @@ class LocationService extends GetxService {
 
       try {
         // Update location in the ride document
-        await _firestore.collection('rides').doc(rideId).update({
+        await _firestore.collection(Constants.ridesCollection).doc(rideId).update({
           'driverLocation': GeoPoint(locationData.latitude!, locationData.longitude!),
           'driverHeading': locationData.heading,
           'driverSpeed': locationData.speed,
@@ -368,7 +381,7 @@ class LocationService extends GetxService {
         });
 
         // Also update in a separate collection for better performance
-        await _firestore.collection('rideLocations').doc(rideId).set({
+        await _firestore.collection(Constants.rideLocationsCollection).doc(rideId).set({
           'driverId': driverId,
           'location': GeoPoint(locationData.latitude!, locationData.longitude!),
           'heading': locationData.heading,
@@ -400,7 +413,7 @@ class LocationService extends GetxService {
   // Add this method to listen for driver location updates
   Stream<LatLng> listenForDriverLocation(String rideId) {
     return _firestore
-        .collection('rideLocations')
+        .collection(Constants.rideLocationsCollection)
         .doc(rideId)
         .snapshots()
         .map((snapshot) {

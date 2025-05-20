@@ -133,7 +133,7 @@ class AuthController extends GetxController {
         color: '',
         licensePlate: '',
         features: [],
-        photoUrl: '',
+        photos: [],
         vehicleType: 'sedan',
         capacity: 4,
       );

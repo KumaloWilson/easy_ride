@@ -36,16 +36,16 @@ class RideStartConfirmationView extends GetView<RiderController> {
           if (controller.driverInfo.value != null) ...[
             CircleAvatar(
               radius: 50,
-              backgroundImage: controller.driverInfo.value!['user'].profileImageUrl != null
-                  ? NetworkImage(controller.driverInfo.value!['user'].profileImageUrl!)
+              backgroundImage: controller.driverInfo.value!.user.profileImageUrl != null
+                  ? NetworkImage(controller.driverInfo.value!.user.profileImageUrl!)
                   : null,
-              child: controller.driverInfo.value!['user'].profileImageUrl == null
+              child: controller.driverInfo.value!.user.profileImageUrl == null
                   ? const Icon(Icons.person, size: 50)
                   : null,
             ),
             const SizedBox(height: 16),
             Text(
-              controller.driverInfo.value!['user'].fullName ?? 'Your Driver',
+              controller.driverInfo.value!.user.fullName ?? 'Your Driver',
               style: const TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
@@ -53,14 +53,14 @@ class RideStartConfirmationView extends GetView<RiderController> {
             ),
             const SizedBox(height: 8),
             Text(
-              '${controller.driverInfo.value!['driver'].vehicleColor} ${controller.driverInfo.value!['driver'].vehicleModel}',
+              '${controller.driverInfo.value!.vehicle.model} ${controller.driverInfo.value!.vehicle}',
               style: TextStyle(
                 fontSize: 16,
                 color: Colors.grey[600],
               ),
             ),
             Text(
-              'License Plate: ${controller.driverInfo.value!['driver'].licensePlate}',
+              'License Plate: ${controller.driverInfo.value!.licenseNumber}',
               style: TextStyle(
                 fontSize: 16,
                 color: Colors.grey[600],

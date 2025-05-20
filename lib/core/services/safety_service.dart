@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:easy_ride/core/values/constants.dart';
 import 'package:get/get.dart';
 import 'package:location/location.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -8,6 +9,8 @@ import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
+
+import '../utils/logs.dart';
 
 class SafetyService extends GetxService {
   final AuthService _authService = Get.find<AuthService>();
@@ -35,9 +38,9 @@ class SafetyService extends GetxService {
     if (_authService.firebaseUser.value != null) {
       try {
         final doc = await _firestore
-            .collection('users')
+            .collection(Constants.usersCollection)
             .doc(_authService.firebaseUser.value!.uid)
-            .collection('settings')
+            .collection(Constants.settingsCollection)
             .doc('emergency')
             .get();
         
@@ -47,7 +50,7 @@ class SafetyService extends GetxService {
           emergencyContactPhone.value = data?['phone'] ?? '';
         }
       } catch (e) {
-        print('Error loading emergency contact: $e');
+        DevLogs.error('Error loading emergency contact: $e');
       }
     }
   }
@@ -56,9 +59,9 @@ class SafetyService extends GetxService {
     if (_authService.firebaseUser.value != null) {
       try {
         await _firestore
-            .collection('users')
+            .collection(Constants.usersCollection)
             .doc(_authService.firebaseUser.value!.uid)
-            .collection('settings')
+            .collection(Constants.settingsCollection)
             .doc('emergency')
             .set({
               'name': name,
@@ -69,7 +72,7 @@ class SafetyService extends GetxService {
         emergencyContactName.value = name;
         emergencyContactPhone.value = phone;
       } catch (e) {
-        print('Error setting emergency contact: $e');
+        DevLogs.error('Error setting emergency contact: $e');
         throw Exception('Failed to save emergency contact');
       }
     }
@@ -108,7 +111,7 @@ class SafetyService extends GetxService {
         'updatedAt': FieldValue.serverTimestamp(),
       };
       
-      final docRef = await _firestore.collection('emergencies').add(emergency);
+      final docRef = await _firestore.collection(Constants.emergencies).add(emergency);
       _emergencyId = docRef.id;
       
       // Start location tracking
@@ -122,7 +125,7 @@ class SafetyService extends GetxService {
         await _contactEmergencyContact();
       }
     } catch (e) {
-      print('Error activating emergency: $e');
+      DevLogs.error('Error activating emergency: $e');
       throw Exception('Failed to activate emergency mode');
     }
   }
@@ -150,7 +153,7 @@ class SafetyService extends GetxService {
       isEmergencyActive.value = false;
       _emergencyId = null;
     } catch (e) {
-      print('Error deactivating emergency: $e');
+      DevLogs.error('Error deactivating emergency: $e');
       throw Exception('Failed to deactivate emergency mode');
     }
   }
@@ -206,7 +209,7 @@ class SafetyService extends GetxService {
         'updatedAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {
-      print('Error updating emergency location: $e');
+      DevLogs.error('Error updating emergency location: $e');
     }
   }
   
@@ -251,7 +254,7 @@ class SafetyService extends GetxService {
         }
       }
     } catch (e) {
-      print('Error starting recording: $e');
+      DevLogs.error('Error starting recording: $e');
       throw Exception('Failed to start recording');
     }
   }
@@ -274,7 +277,7 @@ class SafetyService extends GetxService {
       
       return path;
     } catch (e) {
-      print('Error stopping recording: $e');
+      DevLogs.error('Error stopping recording: $e');
       throw Exception('Failed to stop recording');
     }
   }
@@ -294,7 +297,7 @@ class SafetyService extends GetxService {
         text: 'Emergency recording from Easy Ride app.',
       );
     } catch (e) {
-      print('Error sharing recording: $e');
+      DevLogs.error('Error sharing recording: $e');
       throw Exception('Failed to share recording');
     }
   }

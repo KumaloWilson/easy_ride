@@ -1,3 +1,4 @@
+import 'package:easy_ride/core/values/constants.dart';
 import 'package:get/get.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -44,7 +45,7 @@ class AuthService extends GetxService {
   
   Future<void> _loadUserData(String userId) async {
     try {
-      DocumentSnapshot userDoc = await _firestore.collection('users').doc(userId).get();
+      DocumentSnapshot userDoc = await _firestore.collection(Constants.usersCollection).doc(userId).get();
       
       if (userDoc.exists) {
         Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
@@ -52,7 +53,7 @@ class AuthService extends GetxService {
         
         // Update email verification status
         if (firebaseUser.value != null) {
-          await _firestore.collection('users').doc(userId).update({
+          await _firestore.collection(Constants.usersCollection).doc(userId).update({
             'emailVerified': firebaseUser.value!.emailVerified,
           });
           
@@ -122,7 +123,7 @@ class AuthService extends GetxService {
         
         if (_auth.currentUser!.emailVerified) {
           // Update user data in Firestore
-          await _firestore.collection('users').doc(_auth.currentUser!.uid).update({
+          await _firestore.collection(Constants.usersCollection).doc(_auth.currentUser!.uid).update({
             'emailVerified': true,
           });
           
@@ -173,7 +174,7 @@ class AuthService extends GetxService {
   
   Future<void> createUserInFirestore(UserModel user) async {
     try {
-      await _firestore.collection('users').doc(user.id).set(user.toMap());
+      await _firestore.collection(Constants.usersCollection).doc(user.id).set(user.toMap());
       currentUser.value = user;
     } catch (e) {
       DevLogs.error('Error creating user in Firestore', exception: e);
@@ -184,7 +185,7 @@ class AuthService extends GetxService {
   Future<void> updateUserData(Map<String, dynamic> data) async {
     try {
       if (_auth.currentUser != null) {
-        await _firestore.collection('users').doc(_auth.currentUser!.uid).update(data);
+        await _firestore.collection(Constants.usersCollection).doc(_auth.currentUser!.uid).update(data);
         await _loadUserData(_auth.currentUser!.uid);
       }
     } catch (e) {

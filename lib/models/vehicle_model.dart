@@ -8,7 +8,7 @@ class VehicleModel {
   final String vehicleType; // sedan, suv, etc.
   final int capacity;
   final List<String> features; // AC, wheelchair accessible, etc.
-  final String photoUrl;
+  final List<String>  photos;
 
   VehicleModel({
     required this.id,
@@ -20,7 +20,7 @@ class VehicleModel {
     required this.vehicleType,
     required this.capacity,
     required this.features,
-    required this.photoUrl,
+    required this.photos,
   });
 
   factory VehicleModel.fromJson(Map<String, dynamic> json) {
@@ -34,7 +34,7 @@ class VehicleModel {
       vehicleType: json['vehicleType'] as String,
       capacity: json['capacity'] as int,
       features: List<String>.from(json['features'] as List),
-      photoUrl: json['photoUrl'] as String,
+      photos: List<String>.from(json['photos'] as List),
     );
   }
 
@@ -49,7 +49,7 @@ class VehicleModel {
       'vehicleType': vehicleType,
       'capacity': capacity,
       'features': features,
-      'photoUrl': photoUrl,
+      'photos': photos,
     };
   }
 }

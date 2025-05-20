@@ -448,13 +448,13 @@ class SavedPlacesView extends StatelessWidget {
                     return;
                   }
 
-                  final location = {
-                    'name': nameController.text.trim(),
-                    'address': addressController.text.trim(),
-                    'latitude': controller.currentLocation.value.latitude,
-                    'longitude': controller.currentLocation.value.longitude,
-                    'type': type ?? selectedType,
-                  };
+                  final location = LocationModel(
+                      name: nameController.text.trim(),
+                      address: addressController.text.trim(),
+                     latitude: controller.currentLocation.value.latitude,
+                     longitude: controller.currentLocation.value.longitude,
+                  );
+
 
                   controller.saveLocation(location);
                   Navigator.of(context).pop();

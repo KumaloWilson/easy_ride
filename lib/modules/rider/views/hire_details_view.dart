@@ -290,7 +290,7 @@ class _HireDetailsViewState extends State<HireDetailsView> {
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: Image.network(
-                  vehicle!.photoUrl,
+                  vehicle!.photos[0],
                   width: 80,
                   height: 80,
                   fit: BoxFit.cover,

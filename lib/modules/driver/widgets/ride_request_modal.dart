@@ -1,12 +1,14 @@
+import 'package:easy_ride/models/ride_request_model.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:easy_ride/core/theme/app_theme.dart';
 import 'package:easy_ride/modules/driver/controllers/driver_controller.dart';
 import 'package:lottie/lottie.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 class RideRequestModal extends StatelessWidget {
   final DriverController controller;
-  final Map<String, dynamic> rideRequest;
+  final RideRequest rideRequest;
 
   const RideRequestModal({
     Key? key,
@@ -17,32 +19,38 @@ class RideRequestModal extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: const BoxDecoration(
+      padding: const EdgeInsets.only(top: 16, left: 24, right: 24, bottom: 36),
+      decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(20),
-          topRight: Radius.circular(20),
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(24),
+          topRight: Radius.circular(24),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, -5),
+          ),
+        ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Header
+          // Drag handle
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey[300],
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Header with countdown timer
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppTheme.primaryColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(
-                  Icons.directions_car,
-                  color: AppTheme.primaryColor,
-                ),
-              ),
-              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -50,25 +58,61 @@ class RideRequestModal extends StatelessWidget {
                     const Text(
                       'New Ride Request',
                       style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 20,
                       ),
                     ),
-                    Obx(() => Text(
-                      'Expires in ${controller.requestTimeRemaining.value.toInt()}s',
-                      style: TextStyle(
-                        color: Colors.grey[600],
-                      ),
-                    )),
+                    const SizedBox(height: 4),
+                    Obx(() {
+                      final seconds = controller.requestTimeRemaining.value.toInt();
+                      return Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: seconds < 10
+                                  ? Colors.red.withOpacity(0.1)
+                                  : AppTheme.primaryColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.timer_outlined,
+                                  size: 14,
+                                  color: seconds < 10 ? Colors.red : AppTheme.primaryColor,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${seconds}s',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: seconds < 10 ? Colors.red : AppTheme.primaryColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      );
+                    }),
                   ],
                 ),
               ),
-              Text(
-                '\$${rideRequest['fare'].toStringAsFixed(2)}',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20,
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
                   color: AppTheme.primaryColor,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Text(
+                  '\$${rideRequest.estimatedFare.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    color: Colors.white,
+                  ),
                 ),
               ),
             ],
@@ -76,124 +120,226 @@ class RideRequestModal extends StatelessWidget {
 
           const SizedBox(height: 24),
 
-          // Map preview (would be implemented with a static map image)
+          // Map preview with route visualization
           Container(
-            height: 150,
+            height: 180,
             width: double.infinity,
             decoration: BoxDecoration(
               color: Colors.grey[200],
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-            child: Center(
-              child: Lottie.asset(
-                'assets/animations/map_loading.json',
-                width: 100,
-                height: 100,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Stack(
+                children: [
+                  Center(
+                    child: Lottie.asset(
+                      'assets/animations/map_loading.json',
+                      width: 120,
+                      height: 120,
+                    ),
+                  ),
+                  Positioned(
+                    bottom: 12,
+                    right: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.route,
+                            color: AppTheme.primaryColor,
+                            size: 16,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${rideRequest.distance?.toStringAsFixed(1) ?? "0.0"} km',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
 
           const SizedBox(height: 24),
 
-          // Ride details
+          // Ride details with route visualization
           Container(
-            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.grey[100],
-              borderRadius: BorderRadius.circular(12),
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.grey[200]!),
             ),
             child: Column(
               children: [
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.location_on,
-                      color: Colors.red,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Column(
                         children: [
-                          const Text(
-                            'Pickup',
-                            style: TextStyle(
-                              color: Colors.grey,
-                              fontSize: 12,
+                          Container(
+                            width: 12,
+                            height: 12,
+                            decoration: BoxDecoration(
+                              color: Colors.green,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 2),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.green.withOpacity(0.3),
+                                  blurRadius: 4,
+                                  spreadRadius: 2,
+                                ),
+                              ],
                             ),
                           ),
-                          Text(
-                            rideRequest['pickup']['name'] ?? 'Pickup Location',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
+                          Container(
+                            width: 2,
+                            height: 35,
+                            color: Colors.grey[300],
+                          ),
+                          Container(
+                            width: 12,
+                            height: 12,
+                            decoration: BoxDecoration(
+                              color: Colors.blue,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 2),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.blue.withOpacity(0.3),
+                                  blurRadius: 4,
+                                  spreadRadius: 2,
+                                ),
+                              ],
                             ),
                           ),
                         ],
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Pickup',
+                                  style: TextStyle(
+                                    color: Colors.grey,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  rideRequest.pickupLocation.name ?? 'Pickup Location',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 24),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Dropoff',
+                                  style: TextStyle(
+                                    color: Colors.grey,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  rideRequest.dropoffLocation.name ?? 'Dropoff Location',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.location_on,
-                      color: Colors.blue,
-                      size: 20,
+
+                // Ride info summary
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(16),
+                      bottomRight: Radius.circular(16),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Dropoff',
-                            style: TextStyle(
-                              color: Colors.grey,
-                              fontSize: 12,
-                            ),
-                          ),
-                          Text(
-                            rideRequest['dropoff']['name'] ?? 'Dropoff Location',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
+                    border: Border(
+                      top: BorderSide(color: Colors.grey[200]!),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _buildInfoItem(
+                        icon: Icons.access_time,
+                        title: 'ETA',
+                        value: '${(rideRequest.scheduledTime != null ?
+                        rideRequest.scheduledTime!.difference(DateTime.now()).inMinutes :
+                        15).toString()} min',
                       ),
-                    ),
-                  ],
+                      _buildVerticalDivider(),
+                      _buildInfoItem(
+                        icon: Icons.directions_car_outlined,
+                        title: 'Type',
+                        value: rideRequest.vehicleType,
+                      ),
+                      _buildVerticalDivider(),
+                      _buildInfoItem(
+                        icon: Icons.payment_outlined,
+                        title: 'Payment',
+                        value: rideRequest.paymentMethod,
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
 
-          const SizedBox(height: 16),
-
-          // Distance and duration
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _buildInfoItem(
-                icon: Icons.route,
-                title: 'Distance',
-                value: '${rideRequest['distance'].toStringAsFixed(1)} km',
-              ),
-              _buildInfoItem(
-                icon: Icons.access_time,
-                title: 'Duration',
-                value: '${(rideRequest['duration'] ?? 0).toStringAsFixed(0)} min',
-              ),
-              _buildInfoItem(
-                icon: Icons.payment,
-                title: 'Payment',
-                value: rideRequest['paymentMethod'] ?? 'Cash',
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 24),
+          const SizedBox(height: 28),
 
           // Action buttons
           Row(
@@ -204,15 +350,18 @@ class RideRequestModal extends StatelessWidget {
                     controller.declineRideRequest();
                   },
                   style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.black87,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
+                      borderRadius: BorderRadius.circular(12),
                     ),
+                    side: BorderSide(color: Colors.grey[300]!),
                   ),
                   child: const Text(
                     'Decline',
                     style: TextStyle(
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
                     ),
                   ),
                 ),
@@ -225,15 +374,18 @@ class RideRequestModal extends StatelessWidget {
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.primaryColor,
+                    foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
+                    elevation: 0,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                   ),
                   child: const Text(
                     'Accept',
                     style: TextStyle(
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
                     ),
                   ),
                 ),
@@ -255,24 +407,34 @@ class RideRequestModal extends StatelessWidget {
         Icon(
           icon,
           color: AppTheme.primaryColor,
-          size: 20,
+          size: 18,
         ),
         const SizedBox(height: 4),
         Text(
           title,
           style: TextStyle(
             color: Colors.grey[600],
-            fontSize: 12,
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
           ),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 2),
         Text(
           value,
           style: const TextStyle(
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w600,
+            fontSize: 13,
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildVerticalDivider() {
+    return Container(
+      height: 24,
+      width: 1,
+      color: Colors.grey[200],
     );
   }
 }

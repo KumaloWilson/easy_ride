@@ -6,6 +6,7 @@ import 'package:easy_ride/core/services/firebase_service.dart';
 import 'package:easy_ride/core/services/location_service.dart';
 import 'package:easy_ride/core/services/notification_service.dart';
 import 'package:easy_ride/core/utils/logs.dart';
+import 'package:easy_ride/core/values/constants.dart';
 import 'package:easy_ride/models/driver_model.dart';
 import 'package:easy_ride/models/location_model.dart';
 import 'package:easy_ride/models/ride_model.dart';
@@ -81,14 +82,14 @@ class DriverController extends GetxController {
   );
 
   // Ride requests and active ride
-  final Rx<RideRequestModel?> pendingRideRequest = Rx<RideRequestModel?>(null);
+  final Rx<RideRequest?> pendingRideRequest = Rx<RideRequest?>(null);
   final Rx<RideModel?> activeRide = Rx<RideModel?>(null);
-  final RxMap<String, dynamic> incomingRideRequest = RxMap<String, dynamic>({});
+  final Rx<RideRequest?> incomingRideRequest = Rx<RideRequest?>(null);
   final RxBool hasIncomingRequest = false.obs;
   final RxDouble requestTimeRemaining = 30.0.obs;
   final RxBool isRideAccepted = false.obs;
-  final RxMap<String, dynamic> currentRide = RxMap<String, dynamic>({});
-  final RxMap<String, dynamic> riderInfo = RxMap<String, dynamic>({});
+  final Rx<RideModel?> currentRide = Rx<RideModel?>(null);
+  final Rx<UserModel?> riderInfo = Rx<UserModel?>(null);
 
   // Navigation
   final RxBool isNavigating = false.obs;
@@ -200,13 +201,13 @@ class DriverController extends GetxController {
       final user = _auth.currentUser;
       if (user != null) {
         // Get user data
-        final userDoc = await _firestore.collection('users').doc(user.uid).get();
+        final userDoc = await _firestore.collection(Constants.usersCollection).doc(user.uid).get();
 
         if (userDoc.exists) {
           currentUser.value = UserModel.fromMap(userDoc.data() as Map<String, dynamic>, user.uid);
 
           // Get driver data
-          final driverDoc = await _firestore.collection('drivers').doc(user.uid).get();
+          final driverDoc = await _firestore.collection(Constants.driversCollection).doc(user.uid).get();
 
           DevLogs.info(driverDoc.data().toString());
 
@@ -231,7 +232,7 @@ class DriverController extends GetxController {
       DevLogs.info('Creating missing driver profile for user $userId');
 
       // Get user data
-      final userDoc = await _firestore.collection('users').doc(userId).get();
+      final userDoc = await _firestore.collection(Constants.usersCollection).doc(userId).get();
       if (!userDoc.exists) {
         DevLogs.error('User document not found for uid: $userId');
         return;
@@ -256,7 +257,7 @@ class DriverController extends GetxController {
         color: '',
         licensePlate: '',
         features: [],
-        photoUrl: '',
+        photos: [],
         vehicleType: 'sedan',
         capacity: 4,
       );
@@ -271,7 +272,7 @@ class DriverController extends GetxController {
       );
 
       // Create driver document
-      await _firestore.collection('drivers').doc(userId).set({
+      await _firestore.collection(Constants.driversCollection).doc(userId).set({
         'id': userId,
         'user': userModel.toMap(),
         'licenseNumber': '',
@@ -293,7 +294,7 @@ class DriverController extends GetxController {
       });
 
       // Create driver location document
-      await _firestore.collection('driverLocations').doc(userId).set({
+      await _firestore.collection(Constants.driverLocationsCollection).doc(userId).set({
         'driverId': userId,
         'location': GeoPoint(0, 0),
         'status': 'offline',
@@ -303,7 +304,7 @@ class DriverController extends GetxController {
       });
 
       // Reload driver data
-      final newDriverDoc = await _firestore.collection('drivers').doc(userId).get();
+      final newDriverDoc = await _firestore.collection(Constants.driversCollection).doc(userId).get();
       if (newDriverDoc.exists) {
         currentDriver.value = DriverModel.fromJson(newDriverDoc.data() as Map<String, dynamic>);
       }
@@ -327,7 +328,7 @@ class DriverController extends GetxController {
 
       // Get driver data if not already loaded
       if (currentDriver.value == null) {
-        final driverDoc = await _firestore.collection('drivers').doc(user.uid).get();
+        final driverDoc = await _firestore.collection(Constants.driversCollection).doc(user.uid).get();
 
         if (driverDoc.exists) {
           currentDriver.value = DriverModel.fromJson(driverDoc.data() as Map<String, dynamic>);
@@ -370,20 +371,22 @@ class DriverController extends GetxController {
   void _setupListeners() {
     // Create custom streams for notifications since the service doesn't have them
     firebaseService.firestore
-        .collection('rideRequests')
+        .collection(Constants.rideRequestsCollection)
         .where('status', isEqualTo: 'pending')
         .snapshots()
         .listen((snapshot) {
       for (var change in snapshot.docChanges) {
         if (change.type == DocumentChangeType.added) {
-          _handleIncomingRideRequest(change.doc.data()!);
+          final data = change.doc.data()!;
+          final rideRequest = RideRequest.fromJson(data);
+          _handleIncomingRideRequest(rideRequest);
         }
       }
     });
 
     // Listen for ride cancellations
     firebaseService.firestore
-        .collection('rides')
+        .collection(Constants.ridesCollection)
         .where('status', isEqualTo: 'cancelled')
         .snapshots()
         .listen((snapshot) {
@@ -465,7 +468,7 @@ class DriverController extends GetxController {
     try {
       final user = _auth.currentUser;
       if (user != null && currentLocation.value != null) {
-        await _firestore.collection('driverLocations').doc(user.uid).set({
+        await _firestore.collection(Constants.driverLocationsCollection).doc(user.uid).set({
           'location': GeoPoint(
             currentLocation.value!.latitude,
             currentLocation.value!.longitude,
@@ -489,7 +492,7 @@ class DriverController extends GetxController {
     try {
       final user = _auth.currentUser;
       if (user != null) {
-        final driverDoc = await _firestore.collection('drivers').doc(user.uid).get();
+        final driverDoc = await _firestore.collection(Constants.driversCollection).doc(user.uid).get();
 
         if (driverDoc.exists) {
           final Map<String, dynamic> data = driverDoc.data() as Map<String, dynamic>;
@@ -575,7 +578,7 @@ class DriverController extends GetxController {
         final token = await FirebaseMessaging.instance.getToken();
         if (token != null) {
           await firebaseService.firestore
-              .collection('drivers')
+              .collection(Constants.driversCollection)
               .doc(currentDriver.value!.id)
               .update({
             'fcmToken': token,
@@ -657,7 +660,7 @@ class DriverController extends GetxController {
     try {
       final user = _auth.currentUser;
       if (user != null) {
-        await _firestore.collection('driverLocations').doc(user.uid).update({
+        await _firestore.collection(Constants.driverLocationsCollection).doc(user.uid).update({
           'status': status.toString().split('.').last,
           'isOnline': status != DriverStatus.offline,
           'isBusy': status == DriverStatus.busy,
@@ -665,7 +668,7 @@ class DriverController extends GetxController {
         });
 
         // Also update the driver document
-        await _firestore.collection('drivers').doc(user.uid).update({
+        await _firestore.collection(Constants.driversCollection).doc(user.uid).update({
           'status': status.toString().split('.').last,
           'isOnline': status != DriverStatus.offline,
           'lastStatusUpdate': FieldValue.serverTimestamp(),
@@ -686,7 +689,7 @@ class DriverController extends GetxController {
     _rideRequestSubscription?.cancel();
 
     _rideRequestSubscription = _firestore
-        .collection('rideRequests')
+        .collection(Constants.rideRequestsCollection)
         .where('status', isEqualTo: 'pending')
         .snapshots()
         .listen((snapshot) {
@@ -695,10 +698,11 @@ class DriverController extends GetxController {
       for (var change in snapshot.docChanges) {
         if (change.type == DocumentChangeType.added) {
           final data = change.doc.data()!;
+          final rideRequest = RideRequest.fromJson(data);
 
           // Check if the request is within the driver's radius
-          final pickupLat = data['pickup']['latitude'] ?? 0.0;
-          final pickupLng = data['pickup']['longitude'] ?? 0.0;
+          final pickupLat = rideRequest.pickupLocation.latitude ?? 0.0;
+          final pickupLng = rideRequest.pickupLocation.longitude ?? 0.0;
           final pickupLocation = LatLng(pickupLat, pickupLng);
 
           if (currentLocation.value == null) continue;
@@ -712,11 +716,8 @@ class DriverController extends GetxController {
 
           // If within 5km radius, show the request
           if (distance <= 5.0) {
-            incomingRideRequest.value = {
-              ...data,
-              'id': change.doc.id,
-              'distance': distance,
-            };
+
+            incomingRideRequest.value = rideRequest.copyWith(distance: distance, id: change.doc.id);
 
             hasIncomingRequest.value = true;
             _startRequestTimer();
@@ -729,7 +730,7 @@ class DriverController extends GetxController {
     });
   }
 
-  void _handleIncomingRideRequest(Map<String, dynamic> rideRequestData) {
+  void _handleIncomingRideRequest(RideRequest rideRequestData) {
     try {
       // Only process if driver is online and not busy
       if (driverStatus.value != DriverStatus.online) {
@@ -737,8 +738,8 @@ class DriverController extends GetxController {
       }
 
       // Check if the request is within the driver's radius
-      final pickupLat = rideRequestData['pickup']['latitude'] ?? 0.0;
-      final pickupLng = rideRequestData['pickup']['longitude'] ?? 0.0;
+      final pickupLat = rideRequestData.pickupLocation.latitude ?? 0.0;
+      final pickupLng = rideRequestData.pickupLocation.longitude ?? 0.0;
       final pickupLocation = LatLng(pickupLat, pickupLng);
 
       if (currentLocation.value == null) return;
@@ -754,14 +755,10 @@ class DriverController extends GetxController {
       if (distance <= 5.0) {
         // Convert to RideRequestModel if needed
         try {
-          final rideRequest = RideRequestModel.fromJson(rideRequestData);
-          pendingRideRequest.value = rideRequest;
+          pendingRideRequest.value = rideRequestData;
         } catch (e) {
           // If conversion fails, use the raw data
-          incomingRideRequest.value = {
-            ...rideRequestData,
-            'distance': distance,
-          };
+          incomingRideRequest.value = rideRequestData.copyWith(distance: distance);
         }
 
         // Show ride request modal
@@ -820,7 +817,7 @@ class DriverController extends GetxController {
   }
 
   Future<void> acceptRideRequest() async {
-    if (pendingRideRequest.value == null && incomingRideRequest.isEmpty) return;
+    if (pendingRideRequest.value == null) return;
 
     _requestTimer?.cancel();
     _rideRequestTimer?.cancel();
@@ -829,30 +826,30 @@ class DriverController extends GetxController {
       final user = _auth.currentUser;
       if (user == null) return;
 
-      String requestId;
+      String? requestId;
       String rideId;
 
       // Handle both types of ride requests
       if (pendingRideRequest.value != null) {
         requestId = pendingRideRequest.value!.id;
-        rideId = requestId; // In this case, they're the same
+        rideId = requestId;
       } else {
-        requestId = incomingRideRequest['id'];
-        rideId = incomingRideRequest['rideId'] ?? requestId;
+        requestId = incomingRideRequest.value?.id;
+        rideId = incomingRideRequest.value!.riderId;
       }
 
       // Update driver status to busy
       await updateDriverStatus(DriverStatus.busy);
 
       // Update the request status
-      await _firestore.collection('rideRequests').doc(requestId).update({
+      await _firestore.collection(Constants.rideRequestsCollection).doc(requestId).update({
         'status': 'accepted',
         'driverId': user.uid,
         'acceptedAt': FieldValue.serverTimestamp(),
       });
 
       // Update the ride with driver info
-      await _firestore.collection('rides').doc(rideId).update({
+      await _firestore.collection(Constants.ridesCollection).doc(rideId).update({
         'status': 'accepted',
         'driverId': user.uid,
         'acceptedAt': FieldValue.serverTimestamp(),
@@ -862,23 +859,24 @@ class DriverController extends GetxController {
       await _locationService.shareDriverLocationInRealTime(rideId, user.uid);
 
       // Get the ride details
-      final rideDoc = await _firestore.collection('rides').doc(rideId).get();
+      final rideDoc = await _firestore.collection(Constants.ridesCollection).doc(rideId).get();
+
       if (rideDoc.exists) {
         final rideData = rideDoc.data()!;
-        currentRide.value = {
-          ...rideData,
-          'id': rideId,
-        };
-
+        final RideModel ride = RideModel.fromJson(rideData as String);
+        currentRide.value = ride.copyWith(id: rideDoc.id);
+        
         // Get rider info
-        final riderId = rideData['riderId'];
+        final riderId = ride.riderId;
         if (riderId != null) {
-          final riderDoc = await _firestore.collection('users').doc(riderId).get();
+          final riderDoc = await _firestore.collection(Constants.usersCollection).doc(riderId).get();
+
+          final UserModel rider = UserModel.fromMap(riderDoc.data() as Map<String, dynamic>, riderId);
+
           if (riderDoc.exists) {
-            riderInfo.value = {
-              ...riderDoc.data()!,
-              'id': riderId,
-            };
+            riderInfo.value = rider.copyWith(
+              id: riderId,
+            );
           }
         }
 
@@ -898,7 +896,7 @@ class DriverController extends GetxController {
 
         isRideAccepted.value = true;
         hasIncomingRequest.value = false;
-        incomingRideRequest.clear();
+        incomingRideRequest.value = null;
         pendingRideRequest.value = null;
         showRideRequestModal.value = false;
         circles.clear();
@@ -917,7 +915,7 @@ class DriverController extends GetxController {
   }
 
   Future<void> rejectRideRequest() async {
-    if (pendingRideRequest.value == null && incomingRideRequest.isEmpty) return;
+    if (pendingRideRequest.value == null) return;
 
     _requestTimer?.cancel();
     _rideRequestTimer?.cancel();
@@ -936,20 +934,20 @@ class DriverController extends GetxController {
         rideId = requestId; // In this case, they're the same
         riderId = pendingRideRequest.value!.riderId;
       } else {
-        requestId = incomingRideRequest['id'];
-        rideId = incomingRideRequest['rideId'] ?? requestId;
-        riderId = incomingRideRequest['riderId'];
+        requestId = incomingRideRequest.value!.id;
+        rideId = incomingRideRequest.value!.riderId ?? requestId;
+        riderId = incomingRideRequest.value!.riderId;
       }
 
       // Update the request status to rejected
-      await _firestore.collection('rideRequests').doc(requestId).update({
+      await _firestore.collection(Constants.rideRequestsCollection).doc(requestId).update({
         'status': 'rejected',
         'driverId': user.uid,
         'rejectedAt': FieldValue.serverTimestamp(),
       });
 
       // Update the ride with driver info
-      await _firestore.collection('rides').doc(rideId).update({
+      await _firestore.collection(Constants.ridesCollection).doc(rideId).update({
         'status': 'rejected',
         'driverId': user.uid,
         'rejectedAt': FieldValue.serverTimestamp(),
@@ -968,7 +966,7 @@ class DriverController extends GetxController {
 
       // Reset request state
       hasIncomingRequest.value = false;
-      incomingRideRequest.clear();
+      incomingRideRequest.value = null;
       pendingRideRequest.value = null;
       showRideRequestModal.value = false;
 
@@ -1000,7 +998,7 @@ class DriverController extends GetxController {
 
       // Check for active ride
       final activeRideQuery = await firebaseService.firestore
-          .collection('rides')
+          .collection(Constants.ridesCollection)
           .where('driverId', isEqualTo: currentDriver.value!.id)
           .where('status', whereIn: [
         'accepted',
@@ -1012,22 +1010,24 @@ class DriverController extends GetxController {
 
       if (activeRideQuery.docs.isNotEmpty) {
         final rideData = activeRideQuery.docs.first.data();
-        final rideId = activeRideQuery.docs.first.id;
 
-        currentRide.value = {
-          ...rideData,
-          'id': rideId,
-        };
+        final ride = RideModel.fromJson(rideData as String);
+
+        currentRide.value = ride.copyWith(id: ride.id);
 
         // Get rider info
-        final riderId = rideData['riderId'];
+        final riderId = ride.riderId;
+
         if (riderId != null) {
-          final riderDoc = await _firestore.collection('users').doc(riderId).get();
+          final riderDoc = await _firestore.collection(Constants.usersCollection).doc(riderId).get();
           if (riderDoc.exists) {
-            riderInfo.value = {
-              ...riderDoc.data()!,
-              'id': riderId,
-            };
+            final UserModel rider = UserModel.fromMap(riderDoc.data() as Map<String, dynamic>, riderId);
+
+            if (riderDoc.exists) {
+              riderInfo.value = rider.copyWith(
+                id: riderId,
+              );
+            }
           }
         }
 
@@ -1036,13 +1036,14 @@ class DriverController extends GetxController {
         isRideAccepted.value = true;
 
         // Listen for ride updates
-        _listenForRideUpdates(rideId);
+        _listenForRideUpdates(ride.id);
 
         // Start location tracking if not already started
         _startLocationTracking();
 
         // Start navigation based on ride status
-        final status = rideData['status'];
+        final status = ride.status;
+
         if (status == 'accepted') {
           _calculateRouteToLocation(isPickup: true);
         } else if (status == 'started') {
@@ -1058,24 +1059,25 @@ class DriverController extends GetxController {
     _currentRideSubscription?.cancel();
 
     _currentRideSubscription = _firestore
-        .collection('rides')
+        .collection(Constants.ridesCollection)
         .doc(rideId)
         .snapshots()
         .listen((snapshot) {
       if (snapshot.exists) {
-        final data = snapshot.data()!;
-        currentRide.value = {
-          ...data,
-          'id': rideId,
-        };
 
-        // If ride is cancelled by rider, reset state
-        if (data['status'] == 'cancelled' && data['cancelledBy'] == 'rider') {
+        final ride = RideModel.fromMap(snapshot.data()!, rideId);
+
+        currentRide.value = ride.copyWith(
+          id: rideId,
+        );
+
+
+        if (ride.status == 'cancelled') {
           _resetRideState();
 
           Get.snackbar(
             'Ride Cancelled',
-            'The rider has cancelled the ride',
+            'The ride has cancelled',
             snackPosition: SnackPosition.BOTTOM,
           );
         }
@@ -1084,18 +1086,19 @@ class DriverController extends GetxController {
   }
 
   Future<void> updateRideStatus(String status) async {
-    if (currentRide.isEmpty) return;
+    if (currentRide == null) return;
 
     try {
-      final rideId = currentRide['id'];
+      final rideId = currentRide.value?.id;
 
-      await _firestore.collection('rides').doc(rideId).update({
+      await _firestore.collection(Constants.ridesCollection).doc(rideId).update({
         'status': status,
         '${status}At': FieldValue.serverTimestamp(),
       });
 
       // Send notification to rider
-      final riderId = currentRide['riderId'];
+      final riderId = currentRide.value?.riderId;
+
       String title = '';
       String body = '';
 
@@ -1121,7 +1124,7 @@ class DriverController extends GetxController {
       }
 
       await _sendNotification(
-        riderId,
+        riderId!,
         title,
         body,
         {
@@ -1150,23 +1153,23 @@ class DriverController extends GetxController {
   }
 
   Future<void> completeRide() async {
-    if (currentRide.isEmpty) return;
+    if (currentRide == null) return;
 
     try {
       isCompletingRide.value = true;
-      final rideId = currentRide['id'];
+      final rideId = currentRide.value?.id;
 
       // Update ride status to completed
-      await _firestore.collection('rides').doc(rideId).update({
+      await _firestore.collection(Constants.ridesCollection).doc(rideId).update({
         'status': 'completed',
         'completedAt': FieldValue.serverTimestamp(),
         'waitingForPayment': true,
       });
 
       // Send notification to rider
-      final riderId = currentRide['riderId'];
+      final riderId = currentRide.value?.riderId;
       await _sendNotification(
-        riderId,
+        riderId!,
         'Ride Completed',
         'Your ride has been completed. Please complete the payment.',
         {
@@ -1176,7 +1179,7 @@ class DriverController extends GetxController {
       );
 
       // Start listening for payment status
-      _listenForPaymentStatus(rideId);
+      _listenForPaymentStatus(rideId!);
 
       DevLogs.debug('Ride marked as completed, waiting for payment');
     } catch (e) {
@@ -1193,7 +1196,7 @@ class DriverController extends GetxController {
   void _listenForPaymentStatus(String rideId) {
     // Listen for payment status updates
     _firestore
-        .collection('rides')
+        .collection(Constants.ridesCollection)
         .doc(rideId)
         .snapshots()
         .listen((snapshot) {
@@ -1231,7 +1234,7 @@ class DriverController extends GetxController {
   }
 
   Future<void> cancelRide() async {
-    if (currentRide.isEmpty) return;
+    if (currentRide == null) return;
 
     try {
       // Show confirmation dialog
@@ -1257,9 +1260,9 @@ class DriverController extends GetxController {
 
       if (result != true) return;
 
-      final rideId = currentRide['id'];
+      final rideId = currentRide.value?.id;
 
-      await _firestore.collection('rides').doc(rideId).update({
+      await _firestore.collection(Constants.ridesCollection).doc(rideId).update({
         'status': 'cancelled',
         'cancelledAt': FieldValue.serverTimestamp(),
         'cancelledBy': 'driver',
@@ -1267,13 +1270,13 @@ class DriverController extends GetxController {
       });
 
       // Stop sharing location
-      _locationService.stopSharingDriverLocation(rideId);
+      _locationService.stopSharingDriverLocation(rideId!);
 
       // Send notification to rider
-      final riderId = currentRide['riderId'];
+      final riderId = currentRide.value?.riderId;
 
       await _sendNotification(
-        riderId,
+        riderId!,
         'Ride Cancelled',
         'Your ride has been cancelled by the driver',
         {
@@ -1299,8 +1302,8 @@ class DriverController extends GetxController {
 
   void _resetRideState() {
     isRideAccepted.value = false;
-    currentRide.clear();
-    riderInfo.clear();
+    currentRide.value = null;
+    riderInfo.value = null;
     isNavigating.value = false;
     routePoints.clear();
     polylines.clear();
@@ -1309,7 +1312,7 @@ class DriverController extends GetxController {
 
   void _handleRideCancellation(String rideId) {
     try {
-      if (currentRide['id'] == rideId) {
+      if (currentRide.value?.id == rideId) {
         // Clear active ride
         _resetRideState();
 
@@ -1333,15 +1336,15 @@ class DriverController extends GetxController {
   // MARK: - Navigation
 
   Future<void> _calculateRouteToLocation({required bool isPickup}) async {
-    if (currentRide.isEmpty || currentLocation.value == null) return;
+    if (currentRide.value == null || currentLocation.value == null) return;
 
     try {
       final targetLat = isPickup
-          ? currentRide['pickup']['latitude'] ?? 0.0
-          : currentRide['dropoff']['latitude'] ?? 0.0;
+          ? currentRide.value?.pickup?.latitude ?? 0.0
+          : currentRide.value?.dropoff?.latitude ?? 0.0;
       final targetLng = isPickup
-          ? currentRide['pickup']['longitude'] ?? 0.0
-          : currentRide['dropoff']['longitude'] ?? 0.0;
+          ? currentRide.value?.pickup?.longitude ?? 0.0
+          : currentRide.value?.dropoff?.longitude ?? 0.0;
 
       if (targetLat == 0.0 || targetLng == 0.0) return;
 
@@ -1373,7 +1376,7 @@ class DriverController extends GetxController {
         ),
         infoWindow: InfoWindow(
             title: isPickup ? 'Pickup' : 'Dropoff',
-            snippet: isPickup ? currentRide['pickup']['name'] : currentRide['dropoff']['name']
+            snippet: isPickup ? currentRide.value?.pickup?.name : currentRide.value?.pickup?.name
         ),
       );
 
@@ -1398,7 +1401,7 @@ class DriverController extends GetxController {
       estimatedTimeInMinutes.value = directions['duration'];
 
       // Update ride with ETA
-      await _firestore.collection('rides').doc(currentRide['id']).update({
+      await _firestore.collection(Constants.ridesCollection).doc(currentRide.value?.id).update({
         'eta': estimatedTimeInMinutes.value,
       });
 
@@ -1415,15 +1418,15 @@ class DriverController extends GetxController {
 
   Future<void> _updateNavigation() async {
     try {
-      if (!isNavigating.value || currentRide.isEmpty || currentLocation.value == null) return;
+      if (!isNavigating.value || currentRide.value == null || currentLocation.value == null) return;
 
-      final isPickupPhase = currentRide['status'] == 'accepted';
+      final isPickupPhase = currentRide.value?.status == 'accepted';
       final targetLat = isPickupPhase
-          ? currentRide['pickup']['latitude'] ?? 0.0
-          : currentRide['dropoff']['latitude'] ?? 0.0;
+          ? currentRide.value?.pickup?.latitude ?? 0.0
+          : currentRide.value?.dropoff?.latitude ?? 0.0;
       final targetLng = isPickupPhase
-          ? currentRide['pickup']['longitude'] ?? 0.0
-          : currentRide['dropoff']['longitude'] ?? 0.0;
+          ? currentRide.value?.pickup?.longitude ?? 0.0
+          : currentRide.value?.dropoff?.longitude ?? 0.0;
 
       if (targetLat == 0.0 || targetLng == 0.0) return;
 
@@ -1531,9 +1534,10 @@ class DriverController extends GetxController {
 
   Future<void> callRider() async {
     try {
-      if (riderInfo.isEmpty) return;
+      if (riderInfo.value == null) return;
 
-      final phone = riderInfo['phoneNumber'];
+      final phone = riderInfo.value?.phoneNumber ?? '';
+
       if (phone != null && phone.isNotEmpty) {
         // Launch phone call
         final url = 'tel:$phone';
@@ -1565,15 +1569,15 @@ class DriverController extends GetxController {
   }
 
   void messageRider() {
-    if (currentRide.isEmpty || riderInfo.isEmpty) return;
+    if (currentRide.value == null || riderInfo.value == null) return;
 
     // Navigate to chat screen
     Get.toNamed(
       '/chat',
       arguments: {
-        'rideId': currentRide['id'],
-        'recipientId': riderInfo['id'],
-        'recipientName': '${riderInfo['firstName']} ${riderInfo['lastName']}',
+        'rideId': currentRide.value!.id,
+        'recipientId': currentRide.value?.riderId,
+        'recipientName': '${riderInfo.value?.fullName}}',
       },
     );
     DevLogs.info('Opening chat with rider');
@@ -1590,7 +1594,7 @@ class DriverController extends GetxController {
         final startOfDay = DateTime(today.year, today.month, today.day);
 
         final todayRides = await _firestore
-            .collection('rides')
+            .collection(Constants.ridesCollection)
             .where('driverId', isEqualTo: user.uid)
             .where('status', isEqualTo: 'completed')
             .where('completedAt', isGreaterThanOrEqualTo: startOfDay)
@@ -1608,7 +1612,7 @@ class DriverController extends GetxController {
         final startOfWeek = DateTime(today.year, today.month, today.day - today.weekday + 1);
 
         final weeklyRides = await _firestore
-            .collection('rides')
+            .collection(Constants.ridesCollection)
             .where('driverId', isEqualTo: user.uid)
             .where('status', isEqualTo: 'completed')
             .where('completedAt', isGreaterThanOrEqualTo: startOfWeek)
@@ -1624,7 +1628,7 @@ class DriverController extends GetxController {
 
         // Get total earnings
         final allRides = await _firestore
-            .collection('rides')
+            .collection(Constants.ridesCollection)
             .where('driverId', isEqualTo: user.uid)
             .where('status', isEqualTo: 'completed')
             .get();
@@ -1653,7 +1657,7 @@ class DriverController extends GetxController {
 
       // Get today's earnings
       final todayRidesQuery = await firebaseService.firestore
-          .collection('rides')
+          .collection(Constants.ridesCollection)
           .where('driverId', isEqualTo: currentDriver.value!.id)
           .where('status', isEqualTo: 'completed')
           .where('endTime', isGreaterThanOrEqualTo: Timestamp.fromDate(today))
@@ -1668,7 +1672,7 @@ class DriverController extends GetxController {
 
       // Get weekly earnings
       final weeklyRidesQuery = await firebaseService.firestore
-          .collection('rides')
+          .collection(Constants.ridesCollection)
           .where('driverId', isEqualTo: currentDriver.value!.id)
           .where('status', isEqualTo: 'completed')
           .where('endTime', isGreaterThanOrEqualTo: Timestamp.fromDate(weekStart))
@@ -1683,7 +1687,7 @@ class DriverController extends GetxController {
 
       // Get monthly earnings
       final monthlyRidesQuery = await firebaseService.firestore
-          .collection('rides')
+          .collection(Constants.ridesCollection)
           .where('driverId', isEqualTo: currentDriver.value!.id)
           .where('status', isEqualTo: 'completed')
           .where('endTime', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart))
@@ -1711,7 +1715,7 @@ class DriverController extends GetxController {
       isLoadingRideHistory.value = true;
 
       final ridesQuery = await firebaseService.firestore
-          .collection('rides')
+          .collection(Constants.ridesCollection)
           .where('driverId', isEqualTo: currentDriver.value!.id)
           .orderBy('requestTime', descending: true)
           .limit(50)
@@ -1731,26 +1735,6 @@ class DriverController extends GetxController {
     } finally {
       isLoadingRideHistory.value = false;
     }
-  }
-
-  // MARK: - Map Controls
-
-  void toggleMapType() {
-    // if (mapType.value == 'normal') {
-    //   mapType.value = 'satellite';
-    //   if (mapController.value != null) {
-    //     mapController.value!.animateCamera(
-    //         CameraUpdate.newMapType(MapType.satellite)
-    //     );
-    //   }
-    // } else {
-    //   mapType.value = 'normal';
-    //   if (mapController.value != null) {
-    //     mapController.value!.animateCamera(
-    //         CameraUpdate.newMapType(MapType.normal)
-    //     );
-    //   }
-    // }
   }
 
   void centerOnUserLocation() {
@@ -1817,7 +1801,7 @@ class DriverController extends GetxController {
   Future<void> _sendNotification(String userId, String title, String body, Map<String, dynamic> data) async {
     try {
       // Get user's FCM token
-      final userDoc = await _firestore.collection('users').doc(userId).get();
+      final userDoc = await _firestore.collection(Constants.usersCollection).doc(userId).get();
       if (!userDoc.exists) return;
 
       final fcmToken = userDoc.data()?['fcmToken'];
@@ -1890,7 +1874,7 @@ class DriverController extends GetxController {
       }
 
       // Update the document status in Firestore
-      await _firestore.collection('drivers').doc(user.uid).update({
+      await _firestore.collection(Constants.driversCollection).doc(user.uid).update({
         'documents.$documentType': {
           'url': documentUrl,
           'uploadedAt': FieldValue.serverTimestamp(),

@@ -735,7 +735,7 @@ class DriverRideDetailsView extends GetView<DriverController> {
               const Text('The rider has completed the payment for this trip.'),
               const SizedBox(height: 10),
               Text(
-                '\$${controller.currentRide['fare']?.toStringAsFixed(2) ?? '0.00'}',
+                '\$${controller.currentRide.value?.fare.toStringAsFixed(2) ?? '0.00'}',
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
               ),
             ],

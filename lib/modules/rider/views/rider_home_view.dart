@@ -1,9 +1,11 @@
 import 'package:easy_ride/models/ride_model.dart';
 import 'package:easy_ride/modules/rider/views/ride_details_view.dart';
+import 'package:easy_ride/modules/rider/views/tabs/maps_tab.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get/get.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import '../../../core/animations/animations.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../models/location_model.dart';
 import '../controllers/rider_controller.dart';
@@ -16,7 +18,7 @@ class RiderHomeView extends StatelessWidget {
   final RiderController controller = Get.find<RiderController>();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
-  RiderHomeView({Key? key}) : super(key: key);
+  RiderHomeView({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -26,7 +28,7 @@ class RiderHomeView extends StatelessWidget {
       body: SafeArea(
         child: Stack(
           children: [
-            _buildMap(),
+            RiderMapsTab(),
             _buildTopBar(context),
             _buildBottomSheet(context),
             _buildCurrentLocationButton(),
@@ -37,39 +39,6 @@ class RiderHomeView extends StatelessWidget {
     );
   }
 
-  // Update the _buildMap method to handle location updates better
-  Widget _buildMap() {
-    return Obx(() {
-      final markers = controller.markers;
-      final polylines = controller.polylines;
-      final currentPos = controller.currentLocation.value;
-      final initialPos = controller.initialCameraPosition.value;
-
-      return GoogleMap(
-        initialCameraPosition: initialPos,
-        markers: markers,
-        polylines: polylines,
-        myLocationEnabled: true,
-        myLocationButtonEnabled: false,
-        zoomControlsEnabled: false,
-        mapToolbarEnabled: false,
-        compassEnabled: true,
-        onMapCreated: (GoogleMapController mapController) {
-          controller.mapController.value = mapController;
-          controller.onMapCreated(mapController);
-
-          // Ensure we center on user location after map is created
-          if (currentPos.latitude != 0 && currentPos.longitude != 0) {
-            Future.delayed(Duration(milliseconds: 500), () {
-              mapController.animateCamera(
-                CameraUpdate.newLatLngZoom(currentPos, 15),
-              );
-            });
-          }
-        },
-      );
-    });
-  }
 
   Widget _buildTopBar(BuildContext context) {
     return Positioned(
@@ -696,14 +665,13 @@ class RiderHomeView extends StatelessWidget {
             onPressed: () {
               // Get current location
               if (controller.currentLocation.value.latitude != 0) {
-                final location = {
-                  'name': nameController.text,
-                  'address': addressController.text,
-                  'latitude': controller.currentLocation.value.latitude,
-                  'longitude': controller.currentLocation.value.longitude,
-                  'type': locationType,
-                };
+                final location = LocationModel(
+                    name: nameController.text,
+                    address: addressController.text,
+                    latitude: controller.currentLocation.value.latitude,
+                    longitude: controller.currentLocation.value.longitude,
 
+                );
                 controller.saveLocation(location);
                 Get.back();
               } else {
@@ -719,46 +687,5 @@ class RiderHomeView extends StatelessWidget {
         ],
       ),
     );
-  }
-}
-
-class AnimatedCard extends StatefulWidget {
-  final Widget child;
-
-  const AnimatedCard({Key? key, required this.child}) : super(key: key);
-
-  @override
-  _AnimatedCardState createState() => _AnimatedCardState();
-}
-
-class _AnimatedCardState extends State<AnimatedCard>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _animation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 300),
-      vsync: this,
-    );
-    _animation = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-    _controller.forward();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      child: widget.child,
-    ).animate().fadeIn(duration: Duration(seconds: 2));
   }
 }

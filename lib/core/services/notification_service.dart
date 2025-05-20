@@ -1,3 +1,5 @@
+import 'package:easy_ride/core/services/preferences_service.dart';
+import 'package:easy_ride/models/ride_request_model.dart';
 import 'package:get/get.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -177,10 +179,16 @@ class NotificationService extends GetxService {
     if (_authService.firebaseUser.value != null) {
       String userId = _authService.firebaseUser.value!.uid;
 
-      await _firestore.collection('users').doc(userId).update({
+      await _firestore.collection(Constants.usersCollection).doc(userId).update({
         'fcmTokens': FieldValue.arrayUnion([token]),
         'lastTokenUpdate': FieldValue.serverTimestamp(),
       });
+
+      if(_authService.isDriver){
+        await _firestore.collection(Constants.driversCollection).doc(userId).update({
+          'fcmToken': token,
+        });
+      }
 
       DevLogs.info('FCM token saved to database');
     }
@@ -191,7 +199,7 @@ class NotificationService extends GetxService {
       String userId = _authService.firebaseUser.value!.uid;
 
       QuerySnapshot snapshot = await _firestore
-          .collection('notifications')
+          .collection(Constants.notificationsCollection)
           .where('userId', isEqualTo: userId)
           .where('read', isEqualTo: false)
           .get();
@@ -378,7 +386,7 @@ class NotificationService extends GetxService {
 
       // Get all unread notifications
       QuerySnapshot snapshot = await _firestore
-          .collection('notifications')
+          .collection(Constants.notificationsCollection)
           .where('userId', isEqualTo: userId)
           .where('read', isEqualTo: false)
           .get();
@@ -406,7 +414,7 @@ class NotificationService extends GetxService {
       String userId = _authService.firebaseUser.value!.uid;
 
       QuerySnapshot snapshot = await _firestore
-          .collection('notifications')
+          .collection(Constants.notificationsCollection)
           .where('userId', isEqualTo: userId)
           .orderBy('createdAt', descending: true)
           .limit(limit)
@@ -426,7 +434,7 @@ class NotificationService extends GetxService {
 
   Future<void> sendNotificationToUser(String userId, String title, String body, Map<String, dynamic> data) async {
     try {
-      DocumentSnapshot userDoc = await _firestore.collection('users').doc(userId).get();
+      DocumentSnapshot userDoc = await _firestore.collection(Constants.usersCollection).doc(userId).get();
 
       if (userDoc.exists) {
         Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
@@ -437,7 +445,7 @@ class NotificationService extends GetxService {
         }
 
         // Also save to notifications collection
-        await _firestore.collection('notifications').add({
+        await _firestore.collection(Constants.notificationsCollection).add({
           'userId': userId,
           'title': title,
           'body': body,
@@ -493,11 +501,11 @@ class NotificationService extends GetxService {
     }
   }
 
-  Future<void> sendRideRequestNotification(String rideId, Map<String, dynamic> rideData) async {
+  Future<void> sendRideRequestNotification(String rideId, RideRequest rideData) async {
     // Find nearby drivers
     List<String> nearbyDriverIds = await _findNearbyDriverIds(
-      rideData['pickup']['latitude'],
-      rideData['pickup']['longitude'],
+      rideData.pickupLocation.latitude,
+      rideData.pickupLocation.longitude,
     );
 
     if (nearbyDriverIds.isEmpty) {
@@ -514,9 +522,9 @@ class NotificationService extends GetxService {
         {
           'type': rideRequest,
           'rideId': rideId,
-          'pickup': rideData['pickup']['name'],
-          'dropoff': rideData['dropoff']['name'],
-          'fare': rideData['fare'],
+          'pickup': rideData.pickupLocation.name,
+          'dropoff': rideData.dropoffLocation.name,
+          'fare': rideData.estimatedFare.toString(),
         },
       );
     }

@@ -281,7 +281,16 @@ class SavedLocationsList extends StatelessWidget {
                   type: selectedType,
                 );
                 
-                await controller.saveLocation(location.toMap());
+                await controller.saveLocation(
+                  LocationModel(
+                    name: nameController.text.trim(),
+                    address: addressController.text.trim(),
+                    latitude: 37.7749, // Placeholder
+                    longitude: -122.4194, // Placeholder
+                    type: selectedType,
+
+                  )
+                );
                 Navigator.of(context).pop();
               },
               child: const Text('Save'),

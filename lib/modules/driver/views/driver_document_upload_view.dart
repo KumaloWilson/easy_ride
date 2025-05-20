@@ -8,7 +8,7 @@ import 'package:easy_ride/core/services/storage_service.dart';
 import 'package:easy_ride/routes/app_pages.dart';
 
 class DriverDocumentUploadView extends StatefulWidget {
-  const DriverDocumentUploadView({Key? key}) : super(key: key);
+  const DriverDocumentUploadView({super.key});
 
   @override
   State<DriverDocumentUploadView> createState() => _DriverDocumentUploadViewState();

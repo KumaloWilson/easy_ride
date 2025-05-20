@@ -52,7 +52,7 @@ class HireVehicleModel extends VehicleModel {
     required super.vehicleType,
     required super.capacity,
     required List<String> vehicleFeatures,  // Must be required since it's non-nullable
-    required super.photoUrl,
+    required super.photos,
     this.ownerId,
     this.status,
     this.hireType,
@@ -95,7 +95,9 @@ class HireVehicleModel extends VehicleModel {
       vehicleFeatures: json['features'] != null
           ? List<String>.from(json['features'] as List)
           : [],  // Default empty list for non-nullable property
-      photoUrl: json['photoUrl'] as String? ?? '',
+      photos: json['photos'] != null
+          ? List<String>.from(json['photos'] as List)
+          : [],  // Default empty list for non-nullable property
       ownerId: json['ownerId'] as String?,
       status: json['status'] != null
           ? HireVehicleStatus.values.firstWhere(
@@ -189,7 +191,7 @@ class HireVehicleModel extends VehicleModel {
     String? vehicleType,
     int? capacity,
     List<String>? vehicleFeatures,
-    String? photoUrl,
+    List<String>? photos,
     String? ownerId,
     HireVehicleStatus? status,
     HireVehicleType? hireType,
@@ -225,7 +227,7 @@ class HireVehicleModel extends VehicleModel {
       vehicleType: vehicleType ?? this.vehicleType,
       capacity: capacity ?? this.capacity,
       vehicleFeatures: vehicleFeatures ?? this.features,  // Use features here
-      photoUrl: photoUrl ?? this.photoUrl,
+      photos: photos ?? this.photos,
       ownerId: ownerId ?? this.ownerId,
       status: status ?? this.status,
       hireType: hireType ?? this.hireType,

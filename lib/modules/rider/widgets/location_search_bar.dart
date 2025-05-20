@@ -459,13 +459,13 @@ class _LocationSearchBarState extends State<LocationSearchBar> {
 
               IconData iconData;
               switch (location.type) {
-                case 'home':
+                case LocationType.home:
                   iconData = Icons.home;
                   break;
-                case 'work':
+                case LocationType.work:
                   iconData = Icons.work;
                   break;
-                case 'favorite':
+                case LocationType.favorite:
                   iconData = Icons.favorite;
                   break;
                 default:
@@ -698,7 +698,7 @@ class SavedPlacesScreen extends StatelessWidget {
   void _showAddLocationDialog(BuildContext context) {
     final TextEditingController nameController = TextEditingController();
     final TextEditingController addressController = TextEditingController();
-    String selectedType = 'favorite';
+    LocationType selectedType = LocationType.favorite;
 
     showDialog(
       context: context,
@@ -733,15 +733,15 @@ class SavedPlacesScreen extends StatelessWidget {
                     spacing: 8,
                     children: [
                       _buildTypeChip(
-                          context, 'home', 'Home', Icons.home,
+                          context, LocationType.home, 'Home', Icons.home,
                           selectedType, (type) => setState(() => selectedType = type)
                       ),
                       _buildTypeChip(
-                          context, 'work', 'Work', Icons.work,
+                          context, LocationType.work, 'Work', Icons.work,
                           selectedType, (type) => setState(() => selectedType = type)
                       ),
                       _buildTypeChip(
-                          context, 'favorite', 'Favorite', Icons.favorite,
+                          context, LocationType.favorite, 'Favorite', Icons.favorite,
                           selectedType, (type) => setState(() => selectedType = type)
                       ),
                     ],
@@ -764,13 +764,15 @@ class SavedPlacesScreen extends StatelessWidget {
                     return;
                   }
 
-                  final location = {
-                    'name': nameController.text.trim(),
-                    'address': addressController.text.trim(),
-                    'latitude': controller.currentLocation.value.latitude,
-                    'longitude': controller.currentLocation.value.longitude,
-                    'type': selectedType,
-                  };
+
+
+                  final location = LocationModel(
+                    name: nameController.text.trim(),
+                    address: addressController.text.trim(),
+                    latitude: controller.currentLocation.value.latitude,
+                    longitude: controller.currentLocation.value.longitude,
+                    type: selectedType,
+                  );
 
                   controller.saveLocation(location);
                   Navigator.of(context).pop();
@@ -787,7 +789,7 @@ class SavedPlacesScreen extends StatelessWidget {
   void _showEditLocationDialog(BuildContext context, dynamic location) {
     final TextEditingController nameController = TextEditingController(text: location.name);
     final TextEditingController addressController = TextEditingController(text: location.address);
-    String selectedType = location.type;
+    LocationType selectedType = location.type;
 
     showDialog(
       context: context,
@@ -820,15 +822,15 @@ class SavedPlacesScreen extends StatelessWidget {
                     spacing: 8,
                     children: [
                       _buildTypeChip(
-                          context, 'home', 'Home', Icons.home,
+                          context, LocationType.home, 'Home', Icons.home,
                           selectedType, (type) => setState(() => selectedType = type)
                       ),
                       _buildTypeChip(
-                          context, 'work', 'Work', Icons.work,
+                          context, LocationType.work, 'Work', Icons.work,
                           selectedType, (type) => setState(() => selectedType = type)
                       ),
                       _buildTypeChip(
-                          context, 'favorite', 'Favorite', Icons.favorite,
+                          context, LocationType.favorite, 'Favorite', Icons.favorite,
                           selectedType, (type) => setState(() => selectedType = type)
                       ),
                     ],
@@ -876,11 +878,11 @@ class SavedPlacesScreen extends StatelessWidget {
 
   Widget _buildTypeChip(
       BuildContext context,
-      String type,
+      LocationType type,
       String label,
       IconData icon,
-      String selectedType,
-      Function(String) onSelected,
+      LocationType selectedType,
+      Function(LocationType) onSelected,
       ) {
     final isSelected = type == selectedType;
 
@@ -894,7 +896,7 @@ class SavedPlacesScreen extends StatelessWidget {
             color: isSelected ? Colors.white : Colors.black87,
           ),
           const SizedBox(width: 4),
-          Text(label),
+          Text(label.toString().split('.').last),
         ],
       ),
       selected: isSelected,

@@ -83,7 +83,7 @@ class RiderController extends GetxController {
   final RxList<LatLng> routePoints = <LatLng>[].obs;
 
   // Driver info
-  final Rx<Map<String, dynamic>?> driverInfo = Rx<Map<String, dynamic>?>(null);
+  final Rx<DriverModel?> driverInfo = Rx<DriverModel?>(null);
 
   // ETA
   final RxDouble distanceToPickup = 0.0.obs;
@@ -133,7 +133,7 @@ class RiderController extends GetxController {
   final Rx<ThemeMode> themeMode = ThemeMode.system.obs;
 
   // Nearby drivers
-  final RxList<Map<String, dynamic>> nearbyDrivers = <Map<String, dynamic>>[].obs;
+  final RxList<DriverModel> nearbyDrivers = <DriverModel>[].obs;
   final RxBool isLoadingNearbyDrivers = false.obs;
   final RxSet<Marker> nearbyDriverMarkers = <Marker>{}.obs;
 
@@ -546,10 +546,7 @@ class RiderController extends GetxController {
         final UserModel user = UserModel.fromMap(userData, driverId);
         final DriverModel driver = DriverModel.fromJson(driverData);
 
-        driverInfo.value = {
-          'user': user,
-          'driver': driver,
-        };
+        driverInfo.value = driver;
 
         // Start listening for driver location updates
         _listenForDriverLocationUpdates(driverId);
@@ -1021,44 +1018,38 @@ class RiderController extends GetxController {
     try {
       // Get nearby drivers from Firestore
       final driversSnapshot = await _firestore
-          .collection(Constants.driverLocationsCollection)
+          .collection(Constants.driversCollection)
           .where('isOnline', isEqualTo: true)
           .where('isBusy', isEqualTo: false)
           .get();
 
-      final List<Map<String, dynamic>> drivers = [];
+      final List<DriverModel> drivers = [];
       final Set<Marker> driverMarkers = {};
 
       for (var doc in driversSnapshot.docs) {
-        final data = doc.data();
-        final driverId = data['driverId'] as String;
-        final location = data['location'] as GeoPoint;
+        final nearByDriver = DriverModel.fromJson(doc.data());
+
 
         // Calculate distance to pickup
         final distance = _calculateDistance(
           pickupLocation.value!.latitude,
           pickupLocation.value!.longitude,
-          location.latitude,
-          location.longitude,
+          nearByDriver.currentLocation.latitude,
+          nearByDriver.currentLocation.longitude,
         );
 
         // Only include drivers within 10km
         if (distance <= 10.0) {
           // Get driver details
-          final driverDoc = await _firestore.collection('drivers').doc(driverId).get();
-          final userDoc = await _firestore.collection('users').doc(driverId).get();
+          final driverDoc = await _firestore.collection(Constants.driversCollection).doc(nearByDriver.id).get();
+          final userDoc = await _firestore.collection(Constants.usersCollection).doc(nearByDriver.id).get();
 
           if (driverDoc.exists && userDoc.exists) {
-            final driverData = driverDoc.data()!;
-            final userData = userDoc.data()!;
 
-            final driver = {
-              'id': driverId,
-              'distance': distance,
-              'location': LatLng(location.latitude, location.longitude),
-              'driver': DriverModel.fromJson(driverData),
-              'user': UserModel.fromMap(userData, driverId),
-            };
+            final driver = DriverModel.fromJson(driverDoc.data() as Map<String, dynamic>);
+
+            final userData = UserModel.fromMap(userDoc.data() as Map<String, dynamic>, driver.id);
+
 
             drivers.add(driver);
 
@@ -1070,11 +1061,11 @@ class RiderController extends GetxController {
               );
 
               final marker = Marker(
-                markerId: MarkerId('driver_$driverId'),
-                position: LatLng(location.latitude, location.longitude),
+                markerId: MarkerId('driver_${driver.id}'),
+                position: LatLng(driver.currentLocation.latitude, nearByDriver.currentLocation.longitude),
                 icon: icon,
                 infoWindow: InfoWindow(
-                  title: userData['fullName'] ?? 'Driver',
+                  title: driver.user.fullName,
                   snippet: '${distance.toStringAsFixed(1)} km away',
                 ),
               );
@@ -1084,11 +1075,11 @@ class RiderController extends GetxController {
               DevLogs.error('Error creating driver marker', exception: e);
               // Fallback to default marker
               final marker = Marker(
-                markerId: MarkerId('driver_$driverId'),
-                position: LatLng(location.latitude, location.longitude),
+                markerId: MarkerId('driver_${driver.id}'),
+                position: LatLng(driver.currentLocation.latitude, driver.currentLocation.longitude),
                 icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
                 infoWindow: InfoWindow(
-                  title: userData['fullName'] ?? 'Driver',
+                  title: driver.user.fullName,
                   snippet: '${distance.toStringAsFixed(1)} km away',
                 ),
               );
@@ -1100,7 +1091,7 @@ class RiderController extends GetxController {
       }
 
       // Sort drivers by distance
-      drivers.sort((a, b) => (a['distance'] as double).compareTo(b['distance'] as double));
+      drivers.sort((a, b) => (a.currentLocation.distance )!.compareTo(b.currentLocation.distance as double));
 
       // Update state
       nearbyDrivers.value = drivers;
@@ -1189,7 +1180,7 @@ class RiderController extends GetxController {
   }
 
   // Select a specific driver for the ride
-  Future<void> selectDriver(Map<String, dynamic> driver) async {
+  Future<void> selectDriver(DriverModel driver) async {
     if (pickupLocation.value == null || dropoffLocation.value == null) {
       Get.snackbar(
         'Error',
@@ -1199,7 +1190,7 @@ class RiderController extends GetxController {
       return;
     }
 
-    DevLogs.debug('Selecting driver: ${driver['id']}');
+    DevLogs.debug('Selecting driver: ${driver.id}');
 
     try {
       // Create a ride request with the selected driver
@@ -1213,7 +1204,7 @@ class RiderController extends GetxController {
       final ride = RideModel(
         id: rideId,
         riderId: userId,
-        driverId: driver['id'],
+        driverId: driver.id,
         pickup: pickupLocation.value!,
         dropoff: dropoffLocation.value!,
         rideType: selectedRideType.value,
@@ -1230,10 +1221,10 @@ class RiderController extends GetxController {
       await _firestore.collection(Constants.ridesCollection).doc(rideId).set(ride.toMap());
 
       // Create a ride request document
-      await _firestore.collection('rideRequests').doc(rideId).set({
+      await _firestore.collection(Constants.rideRequestsCollection).doc(rideId).set({
         'id': rideId,
         'riderId': userId,
-        'driverId': driver['id'],
+        'driverId': driver.id,
         'pickup': pickupLocation.value!.toMap(),
         'dropoff': dropoffLocation.value!.toMap(),
         'rideType': selectedRideType.value,
@@ -1254,7 +1245,7 @@ class RiderController extends GetxController {
 
       // Send notification to the selected driver
       await _notificationService.sendNotificationToUser(
-        driver['id'],
+        driver.id,
         'New Ride Request',
         'You have a new ride request',
         {
@@ -1322,7 +1313,7 @@ class RiderController extends GetxController {
 
       // Also update the ride request if it exists
       try {
-        await _firestore.collection('rideRequests').doc(currentRide.value!.id).update({
+        await _firestore.collection(Constants.rideRequestsCollection).doc(currentRide.value!.id).update({
           'status': 'cancelled',
           'cancelledAt': FieldValue.serverTimestamp(),
           'cancelledBy': 'rider',
@@ -1443,21 +1434,21 @@ class RiderController extends GetxController {
     }
   }
 
-  Future<void> saveLocation(Map<String, dynamic> locationData) async {
+  Future<void> saveLocation(LocationModel locationData) async {
     if (_authService.firebaseUser.value == null) return;
 
-    DevLogs.debug('Saving location: ${locationData['name']}');
+    DevLogs.debug('Saving location: ${locationData.name}');
     try {
       final userId = _authService.firebaseUser.value!.uid;
 
       // Create location model
       final location = SavedLocationModel(
         id: const Uuid().v4(),
-        name: locationData['name'],
-        address: locationData['address'],
-        latitude: locationData['latitude'],
-        longitude: locationData['longitude'],
-        type: _getLocationType(locationData['type']),
+        name: locationData.name,
+        address: locationData.address,
+        latitude: locationData.latitude,
+        longitude: locationData.longitude,
+        type: _getLocationType(locationData.type.toString().split('.').last),
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
@@ -1830,7 +1821,7 @@ class RiderController extends GetxController {
   void callDriver() {
     if (driverInfo.value == null) return;
 
-    final phone = driverInfo.value!['user'].phoneNumber;
+    final phone = driverInfo.value!.user.phoneNumber;
     if (phone != null && phone.isNotEmpty) {
       // Launch phone call
       _safetyService.makePhoneCall(phone);

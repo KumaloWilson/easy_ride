@@ -39,19 +39,36 @@ class DriverModel {
   });
 
   factory DriverModel.fromJson(Map<String, dynamic> json) {
+    // Handle documents properly - ensure it's always a Map
+    Map<String, dynamic> docsMap = {};
+    var docsField = json['documents'];
+
+    if (docsField is Map<String, dynamic>) {
+      docsMap = docsField;
+    } else if (docsField is List) {
+      // Convert legacy list format to map if needed
+      for (int i = 0; i < docsField.length; i++) {
+        docsMap['document_$i'] = docsField[i];
+      }
+    }
+    // If docsField is null or of any other type, we already have an empty map as default
+
     return DriverModel(
-      id: json['id'] as String,
-      user: UserModel.fromMap(json['user'] as Map<String, dynamic>, json['id'] as String),
+      id: json['id'] as String? ?? '',
+      user: UserModel.fromMap(json['user'] as Map<String, dynamic>? ?? {}, json['id'] as String? ?? ''),
       licenseNumber: json['licenseNumber'] as String? ?? '',
       licenseExpiry: json['licenseExpiry'] as String? ?? '',
-      // Handle documents as Map instead of List
-      documents: (json['documents'] as Map<String, dynamic>?) ?? {},
+      documents: docsMap,
       isVerified: json['isVerified'] as bool? ?? false,
       rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
       totalRides: json['totalRides'] as int? ?? 0,
-      vehicle: VehicleModel.fromJson(json['vehicle'] as Map<String, dynamic>),
-      currentLocation: LocationModel.fromJson(json['currentLocation'] as String),
-      status: _parseDriverStatus(json['isOnline'] == true ? 'online' : 'offline'), // Use isOnline field
+      vehicle: VehicleModel.fromJson(json['vehicle'] as Map<String, dynamic>? ?? {}),
+      currentLocation: json['currentLocation'] is String
+          ? LocationModel.fromJson(json['currentLocation'] as String)
+          : LocationModel.fromJson(json['currentLocation'] != null
+          ? json['currentLocation'] is Map ? json['currentLocation'].toString() : json['currentLocation']
+          : '{"name":"","address":"","latitude":0.0,"longitude":0.0}'),
+      status: _parseDriverStatus(json['status'] as String? ?? (json['isOnline'] == true ? 'online' : 'offline')),
       lastStatusUpdate: (json['lastStatusUpdate'] as Timestamp?)?.toDate() ?? DateTime.now(),
       totalEarnings: (json['totalEarnings'] as num?)?.toDouble() ?? 0.0,
       fcmToken: json['fcmToken'] as String? ?? '',

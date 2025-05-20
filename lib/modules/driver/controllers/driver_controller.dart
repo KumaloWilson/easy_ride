@@ -196,6 +196,7 @@ class DriverController extends GetxController {
 
   // Fix the _loadUserData method to use proper document paths
 
+
   Future<void> _loadUserData() async {
     try {
       final user = _auth.currentUser;
@@ -211,11 +212,20 @@ class DriverController extends GetxController {
 
           DevLogs.info(driverDoc.data().toString());
 
-          if (driverDoc.exists) {
-            currentDriver.value = DriverModel.fromJson(driverDoc.data() as Map<String, dynamic>);
+          if (driverDoc.exists && driverDoc.data() != null) {
+            try {
+              final Map<String, dynamic> driverData = driverDoc.data() as Map<String, dynamic>;
 
-            // Load earnings
-            await _loadEarnings();
+              // Make sure driver data contains all required fields
+              currentDriver.value = DriverModel.fromJson(driverData);
+
+              // Load earnings
+              await _loadEarnings();
+            } catch (e) {
+              DevLogs.error('Error parsing driver data', exception: e);
+              // Consider recreating the driver profile with valid data
+              await _createDriverProfile(user.uid);
+            }
           } else {
             // Create driver profile if it doesn't exist
             await _createDriverProfile(user.uid);
@@ -226,6 +236,7 @@ class DriverController extends GetxController {
       DevLogs.error('Error loading user data', exception: e);
     }
   }
+
 
   Future<void> _createDriverProfile(String userId) async {
     try {
@@ -331,6 +342,8 @@ class DriverController extends GetxController {
         final driverDoc = await _firestore.collection(Constants.driversCollection).doc(user.uid).get();
 
         if (driverDoc.exists) {
+          DevLogs.warning(driverDoc.data().toString());
+          DevLogs.info('Driver profile found for user ${user.uid}');
           currentDriver.value = DriverModel.fromJson(driverDoc.data() as Map<String, dynamic>);
         } else {
           // Create driver profile if it doesn't exist
